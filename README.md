@@ -80,7 +80,7 @@ Requirements:
 Install dependencies:
 
 ```bash
-cd 01_HYPE_Data_System
+cd HYPE_Data_System
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
@@ -132,7 +132,7 @@ python validator_monitor_sanitized/monitor_validator_delegations.py \
 ## Repository Structure
 
 ```text
-01_HYPE_Data_System/
+HYPE_Data_System/
 ├── README.md                         # Main repository guide
 ├── .env.example                      # Template for Derive, Turso, and retention settings
 ├── .gitignore                        # Excludes local env files, caches, virtualenvs, and runtime outputs
