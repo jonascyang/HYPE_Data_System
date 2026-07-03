@@ -15,6 +15,7 @@ TENORS = [
     ("3M", 90),
     ("6M", 180),
 ]
+SKEW_FLY_TENORS = TENORS + [("1Y", 365)]
 ATM_CHANGE_OFFSETS = {
     "chg1d": 1,
     "chg2d": 2,
@@ -474,37 +475,26 @@ def _atm_term_metric_near(
 
 
 def _skew_25d_table(conn, latest_ts_ms: int, expiry_metrics: list[dict]) -> list[dict]:
-    history_by_offset = {
-        key: _expiry_metrics_around(conn, latest_ts_ms - days * MS_PER_DAY)
-        for key, days in ATM_CHANGE_OFFSETS.items()
-    }
     rows = []
-    for tenor, target_dte in TENORS:
-        current = _interpolate_expiry_field_detail(expiry_metrics, target_dte, "skew_25d")
-        skew_25d = current["value"]
+    for tenor, target_dte in SKEW_FLY_TENORS:
+        skew = _interpolate_expiry_field_detail(expiry_metrics, target_dte, "skew_25d")
+        fly = _interpolate_expiry_field_detail(expiry_metrics, target_dte, "fly_25d")
         data = {
             "tenor": tenor,
-            "skew25d": skew_25d,
+            "skew25d": skew["value"],
+            "fly25d": fly["value"],
             "chg1d": None,
             "chg2d": None,
             "chg1w": None,
             "chg2w": None,
             "chg1m": None,
-            "method": current["method"],
-            "leftExpiry": current["leftExpiry"],
-            "rightExpiry": current["rightExpiry"],
+            "method": skew["method"],
+            "leftExpiry": skew["leftExpiry"],
+            "rightExpiry": skew["rightExpiry"],
+            "flyMethod": fly["method"],
+            "flyLeftExpiry": fly["leftExpiry"],
+            "flyRightExpiry": fly["rightExpiry"],
         }
-        for key, history_rows in history_by_offset.items():
-            past_value = _interpolate_expiry_field_detail(
-                history_rows,
-                target_dte,
-                "skew_25d",
-            )["value"]
-            data[key] = (
-                skew_25d - past_value
-                if skew_25d is not None and past_value is not None
-                else None
-            )
         rows.append(data)
     return rows
 

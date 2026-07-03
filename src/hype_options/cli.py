@@ -11,8 +11,15 @@ from dotenv import load_dotenv
 from hype_options.collector import collect_live_once
 from hype_options.config import Settings
 from hype_options.dashboard_data import write_dashboard_payload
-from hype_options.db import Repository, apply_schema, connect_turso
+from hype_options.db import (
+    Repository,
+    apply_options_history_schema,
+    apply_order_flow_schema,
+    apply_schema,
+    connect_database,
+)
 from hype_options.derive_client import DeriveClient
+from hype_options.order_flow_collector import collect_order_flow_history_once
 from hype_options.retention import run_retention
 
 
@@ -47,18 +54,49 @@ def format_collection_summary(result) -> str:
     return "\n".join(lines)
 
 
+def format_order_flow_collection_summary(result) -> str:
+    lines = [
+        f"order flow fetched trade rows: {result.fetched_trade_rows}",
+        f"order flow inserted events: {result.inserted_event_rows}",
+        f"order flow skipped rows: {result.skipped_trade_rows}",
+        f"order flow pages fetched: {result.pages_fetched}",
+        f"from timestamp ms: {result.from_timestamp_ms}",
+        f"to timestamp ms: {result.to_timestamp_ms}",
+    ]
+    return "\n".join(lines)
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(prog="python -m hype_options.cli")
     parser.add_argument("--env-file", default=".env.local")
     subparsers = parser.add_subparsers(dest="command", required=True)
 
-    subparsers.add_parser("init-db")
+    init_parser = subparsers.add_parser("init-db")
+    init_parser.add_argument(
+        "--target",
+        choices=["options-history", "order-flow", "full"],
+        default="options-history",
+    )
 
     dry_run_parser = subparsers.add_parser("dry-run-live")
     dry_run_parser.add_argument("--expiry-limit", type=int, default=None)
 
     once_parser = subparsers.add_parser("collect-once")
     once_parser.add_argument("--expiry-limit", type=int, default=None)
+
+    order_flow_once_parser = subparsers.add_parser("collect-order-flow-once")
+    order_flow_once_parser.add_argument("--from-timestamp-ms", type=int, default=None)
+    order_flow_once_parser.add_argument("--to-timestamp-ms", type=int, default=None)
+    order_flow_once_parser.add_argument("--lookback-seconds", type=int, default=3600)
+    order_flow_once_parser.add_argument("--page-size", type=int, default=1000)
+    order_flow_once_parser.add_argument("--max-pages", type=int, default=1)
+
+    order_flow_loop_parser = subparsers.add_parser("collect-order-flow-loop")
+    order_flow_loop_parser.add_argument("--interval-seconds", type=int, default=None)
+    order_flow_loop_parser.add_argument("--max-runs", type=int, default=None)
+    order_flow_loop_parser.add_argument("--lookback-seconds", type=int, default=3600)
+    order_flow_loop_parser.add_argument("--page-size", type=int, default=1000)
+    order_flow_loop_parser.add_argument("--max-pages", type=int, default=1)
 
     loop_parser = subparsers.add_parser("collect-loop")
     loop_parser.add_argument("--interval-seconds", type=int, default=None)
@@ -70,12 +108,28 @@ def main(argv: list[str] | None = None) -> int:
     retention_parser.add_argument("--gex-by-strike-retention-days", type=int, default=None)
     retention_parser.add_argument("--collection-run-retention-days", type=int, default=None)
 
+    serve_parser = subparsers.add_parser("serve-dashboard")
+    serve_parser.add_argument("--host", default="127.0.0.1")
+    serve_parser.add_argument("--port", type=int, default=8000)
+    serve_parser.add_argument("--reload", action="store_true")
+
     export_parser = subparsers.add_parser("export-dashboard-data")
     export_parser.add_argument("--output", type=Path, default=Path("output/dashboard.json"))
     export_parser.add_argument("--history-days", type=int, default=90)
 
     args = parser.parse_args(argv)
     load_dotenv(args.env_file)
+
+    if args.command == "serve-dashboard":
+        import uvicorn
+
+        uvicorn.run(
+            "hype_options.api:app",
+            host=args.host,
+            port=args.port,
+            reload=args.reload,
+        )
+        return 0
 
     if args.command == "dry-run-live":
         client = DeriveClient(
@@ -94,12 +148,23 @@ def main(argv: list[str] | None = None) -> int:
     settings = Settings.from_env()
 
     if args.command == "init-db":
-        conn = connect_turso(settings.turso_database_url, settings.turso_auth_token)
+        if args.target == "order-flow":
+            conn = connect_database(
+                settings.order_flow_database_url,
+                settings.order_flow_database_auth_token,
+            )
+        else:
+            conn = connect_database(settings.database_url, settings.database_auth_token)
         try:
-            apply_schema(conn)
+            if args.target == "options-history":
+                apply_options_history_schema(conn)
+            elif args.target == "order-flow":
+                apply_order_flow_schema(conn)
+            else:
+                apply_schema(conn)
         finally:
             conn.close()
-        print("schema applied")
+        print(f"schema applied: {args.target}")
         return 0
 
     def collect_once():
@@ -107,7 +172,7 @@ def main(argv: list[str] | None = None) -> int:
             base_url=settings.derive_base_url,
             currency=settings.derive_currency,
         )
-        conn = connect_turso(settings.turso_database_url, settings.turso_auth_token)
+        conn = connect_database(settings.database_url, settings.database_auth_token)
         try:
             result = collect_live_once(
                 client=client,
@@ -124,6 +189,45 @@ def main(argv: list[str] | None = None) -> int:
         collect_once()
         return 0
 
+    def collect_order_flow_once():
+        client = DeriveClient(
+            base_url=settings.derive_base_url,
+            currency=settings.derive_currency,
+        )
+        conn = connect_database(
+            settings.order_flow_database_url,
+            settings.order_flow_database_auth_token,
+        )
+        try:
+            apply_order_flow_schema(conn)
+            result = collect_order_flow_history_once(
+                client=client,
+                conn=conn,
+                currency=settings.derive_currency,
+                from_timestamp_ms=getattr(args, "from_timestamp_ms", None),
+                to_timestamp_ms=getattr(args, "to_timestamp_ms", None),
+                lookback_seconds=args.lookback_seconds,
+                page_size=args.page_size,
+                max_pages=args.max_pages,
+            )
+            print(format_order_flow_collection_summary(result))
+            return result
+        finally:
+            conn.close()
+
+    if args.command == "collect-order-flow-once":
+        collect_order_flow_once()
+        return 0
+
+    if args.command == "collect-order-flow-loop":
+        interval_seconds = args.interval_seconds or settings.derive_collection_interval_seconds
+        run_collect_loop(
+            collect_once=collect_order_flow_once,
+            interval_seconds=interval_seconds,
+            max_runs=args.max_runs,
+        )
+        return 0
+
     if args.command == "collect-loop":
         interval_seconds = args.interval_seconds or settings.derive_collection_interval_seconds
         run_collect_loop(
@@ -134,7 +238,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "retention":
-        conn = connect_turso(settings.turso_database_url, settings.turso_auth_token)
+        conn = connect_database(settings.database_url, settings.database_auth_token)
         try:
             result = run_retention(
                 conn,
@@ -158,7 +262,7 @@ def main(argv: list[str] | None = None) -> int:
         return 0
 
     if args.command == "export-dashboard-data":
-        conn = connect_turso(settings.turso_database_url, settings.turso_auth_token)
+        conn = connect_database(settings.database_url, settings.database_auth_token)
         try:
             payload = write_dashboard_payload(
                 conn,

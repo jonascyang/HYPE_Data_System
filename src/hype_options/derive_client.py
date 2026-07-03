@@ -78,6 +78,30 @@ class DeriveClient:
             ),
         )
 
+    def get_trade_history(
+        self,
+        *,
+        currency: str | None = None,
+        instrument_type: str = "option",
+        from_timestamp: int | None = None,
+        to_timestamp: int | None = None,
+        page: int = 1,
+        page_size: int = 1000,
+        tx_status: str = "settled",
+    ) -> dict[str, Any]:
+        payload: dict[str, Any] = {
+            "currency": currency or self.currency,
+            "instrument_type": instrument_type,
+            "page": page,
+            "page_size": page_size,
+            "tx_status": tx_status,
+        }
+        if from_timestamp is not None:
+            payload["from_timestamp"] = from_timestamp
+        if to_timestamp is not None:
+            payload["to_timestamp"] = to_timestamp
+        return self._post("/public/get_trade_history", payload)
+
     def _post(self, path: str, payload: dict[str, Any]) -> dict[str, Any]:
         with httpx.Client(timeout=self.timeout) as client:
             response = client.post(f"{self.base_url}{path}", json=payload)

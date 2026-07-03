@@ -5,3 +5,11 @@ output/
 .env
 .env.local
 .DS_Store
+.env.*.local
+data/
+backups/
+logs/
+
+frontend/node_modules/
+frontend/dist/
+*.tsbuildinfo

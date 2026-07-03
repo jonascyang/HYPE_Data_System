@@ -2,16 +2,14 @@ from __future__ import annotations
 
 import json
 import math
-import re
 from typing import Any
 
 from hype_options.derive_client import expiry_to_yyyymmdd
+from hype_options.instruments import parse_option_instrument_name
 from hype_options.models import Instrument, TickerSnapshot
 
 
-INSTRUMENT_RE = re.compile(
-    r"^HYPE-(?P<expiry>\d{8})-(?P<strike>[0-9._]+)-(?P<option_type>[CP])$"
-)
+SQLITE_MAX_INTEGER = 2**63 - 1
 
 
 def normalize_instruments(payload: dict[str, Any], seen_ms: int) -> list[Instrument]:
@@ -61,14 +59,14 @@ def normalize_tickers(
     tickers = payload.get("result", {}).get("tickers", {})
     rows: list[TickerSnapshot] = []
     for instrument_name, item in tickers.items():
-        match = INSTRUMENT_RE.match(instrument_name)
-        if not match:
+        instrument = parse_option_instrument_name(instrument_name)
+        if instrument is None:
             continue
 
         pricing = item.get("option_pricing") or {}
         stats = item.get("stats") or {}
-        strike = float(match.group("strike").replace("_", "."))
-        option_type = match.group("option_type")
+        strike = instrument.strike
+        option_type = instrument.option_type
 
         bid_price = _to_float(item.get("b"))
         ask_price = _to_float(item.get("a"))
@@ -157,7 +155,8 @@ def classify_surface_quality(
 def _seconds_to_ms(value: Any) -> int | None:
     if value is None:
         return None
-    return int(value) * 1000
+    ts_ms = int(value) * 1000
+    return ts_ms if ts_ms <= SQLITE_MAX_INTEGER else None
 
 
 def _to_float(value: Any) -> float | None:

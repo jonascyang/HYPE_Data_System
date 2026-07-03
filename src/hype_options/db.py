@@ -18,6 +18,8 @@ from hype_options.models import (
 )
 
 SCHEMA_PATH = Path(__file__).with_name("schema.sql")
+OPTIONS_HISTORY_SCHEMA_PATH = Path(__file__).with_name("options_history_schema.sql")
+ORDER_FLOW_SCHEMA_PATH = Path(__file__).with_name("order_flow_schema.sql")
 DEFAULT_MAX_SQL_VARIABLES = 30_000
 
 
@@ -25,15 +27,62 @@ def schema_sql() -> str:
     return SCHEMA_PATH.read_text()
 
 
+def options_history_schema_sql() -> str:
+    return OPTIONS_HISTORY_SCHEMA_PATH.read_text()
+
+
+def order_flow_schema_sql() -> str:
+    return ORDER_FLOW_SCHEMA_PATH.read_text()
+
+
 def apply_schema(conn: sqlite3.Connection) -> None:
     conn.executescript(schema_sql())
+    _ensure_column(conn, "derive_order_flow_events", "wallet", "TEXT")
     conn.commit()
 
 
-def connect_turso(database_url: str, auth_token: str):
+def apply_options_history_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(options_history_schema_sql())
+    conn.commit()
+
+
+def apply_order_flow_schema(conn: sqlite3.Connection) -> None:
+    conn.executescript(order_flow_schema_sql())
+    _ensure_column(conn, "derive_order_flow_events", "wallet", "TEXT")
+    conn.commit()
+
+
+def connect_database(database_url: str, auth_token: str = ""):
+    if database_url.startswith("sqlite:///"):
+        return _connect_sqlite(database_url)
+
     import libsql
 
     return libsql.connect(database=database_url, auth_token=auth_token)
+
+
+def connect_turso(database_url: str, auth_token: str):
+    return connect_database(database_url, auth_token)
+
+
+def _ensure_column(conn, table: str, column: str, definition: str) -> None:
+    existing = {
+        row[1]
+        for row in conn.execute(f"PRAGMA table_info({table})").fetchall()
+    }
+    if column not in existing:
+        conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _connect_sqlite(database_url: str) -> sqlite3.Connection:
+    path = database_url.removeprefix("sqlite:///")
+    if path != ":memory:":
+        Path(path).expanduser().parent.mkdir(parents=True, exist_ok=True)
+    conn = sqlite3.connect(Path(path).expanduser() if path != ":memory:" else path)
+    conn.execute("PRAGMA journal_mode=WAL")
+    conn.execute("PRAGMA busy_timeout=5000")
+    conn.execute("PRAGMA foreign_keys=ON")
+    return conn
 
 
 class Repository:
