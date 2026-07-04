@@ -258,15 +258,17 @@ cd frontend
 npm run build
 ```
 
-## Current VPS Deployment
+## Private Deployment Notes
 
-Current production target:
+Production hostnames, public IPs, SSH aliases, and absolute server paths are intentionally not committed to this public repository. Keep those values in private infrastructure notes or environment-specific runbooks.
 
-| Item | Value |
+Use placeholders in shared documentation:
+
+| Item | Example |
 | --- | --- |
 | SSH alias | `<vps-ssh-alias>` |
 | Project path | `<server-project-path>` |
-| Public frontend | `<dashboard-url>/` |
+| Public frontend | `<dashboard-url>` |
 | Frontend root | `<server-project-path>/frontend/dist` |
 | API bind | `127.0.0.1:8000` behind nginx |
 
