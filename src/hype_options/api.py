@@ -1,12 +1,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import time
 from contextlib import contextmanager
 from typing import Any
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 from starlette.websockets import WebSocketDisconnect
 
@@ -45,6 +46,7 @@ manager = DashboardConnectionManager()
 _options_task: asyncio.Task | None = None
 _order_flow_task: asyncio.Task | None = None
 _options_service: OptionsRealtimeService | None = None
+logger = logging.getLogger(__name__)
 
 app.add_middleware(
     CORSMiddleware,
@@ -52,7 +54,24 @@ app.add_middleware(
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
+    expose_headers=["X-Response-Time-Ms"],
 )
+
+
+@app.middleware("http")
+async def add_response_timing_header(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration_ms = (time.perf_counter() - start) * 1000
+    response.headers["X-Response-Time-Ms"] = f"{duration_ms:.1f}"
+    if duration_ms >= _slow_request_threshold_ms():
+        logger.info(
+            "slow_api_request path=%s method=%s duration_ms=%.1f",
+            request.url.path,
+            request.method,
+            duration_ms,
+        )
+    return response
 
 
 @contextmanager
@@ -84,6 +103,11 @@ def dashboard_bootstrap(expiry: str | None = None, lookbackDays: int = 365) -> d
         selected_expiry=expiry,
         lookback_days=lookbackDays,
     )
+
+
+@app.get("/api/options/dashboard/state")
+def dashboard_state() -> dict[str, Any]:
+    return _current_options_snapshot().state_payload()
 
 
 @app.get("/api/options/iv-smile")
@@ -134,7 +158,8 @@ def order_flow_events(
     limit: int = 100,
 ) -> list[dict[str, Any]]:
     with _order_flow_connection() as conn:
-        return get_order_flow_events(
+        start = time.perf_counter()
+        rows = get_order_flow_events(
             conn,
             execution_type=executionType,
             leg_structure=legStructure,
@@ -148,6 +173,8 @@ def order_flow_events(
             subaccount_id=subaccountId,
             limit=limit,
         )
+        _log_slow_query("order_flow.events", start, {"limit": limit})
+        return rows
 
 
 @app.get("/api/greek-strategy/wallet")
@@ -371,7 +398,9 @@ def _panel_payloads(panels: dict[str, dict[str, Any]], order_flow_conn) -> dict[
 
 
 def _order_flow_payload(params: dict[str, Any], order_flow_conn) -> list[dict[str, Any]]:
-    return get_order_flow_events(
+    limit = _optional_int(params.get("limit"), default=100)
+    start = time.perf_counter()
+    rows = get_order_flow_events(
         order_flow_conn,
         execution_type=_optional_text(params.get("executionType")),
         leg_structure=_optional_text(params.get("legStructure")),
@@ -383,8 +412,25 @@ def _order_flow_payload(params: dict[str, Any], order_flow_conn) -> list[dict[st
         min_premium_usd=_optional_float(params.get("minPremiumUsd")),
         wallet=_optional_text(params.get("wallet")),
         subaccount_id=_optional_text(params.get("subaccountId")),
-        limit=_optional_int(params.get("limit"), default=100),
+        limit=limit,
     )
+    _log_slow_query("order_flow.events", start, {"limit": limit, "source": "websocket"})
+    return rows
+
+
+def _log_slow_query(name: str, start: float, detail: dict[str, Any] | None = None) -> None:
+    duration_ms = (time.perf_counter() - start) * 1000
+    if duration_ms < _slow_query_threshold_ms():
+        return
+    logger.info("slow_backend_query name=%s duration_ms=%.1f detail=%s", name, duration_ms, detail or {})
+
+
+def _slow_request_threshold_ms() -> float:
+    return float(os.getenv("DASHBOARD_SLOW_REQUEST_MS", "750"))
+
+
+def _slow_query_threshold_ms() -> float:
+    return float(os.getenv("DASHBOARD_SLOW_QUERY_MS", "250"))
 
 
 def _optional_text(value: Any) -> str | None:

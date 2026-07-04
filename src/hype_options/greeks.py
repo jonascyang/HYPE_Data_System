@@ -79,8 +79,8 @@ def build_portfolio_curve(
     selected_positions: list[dict[str, Any]],
     ticker_by_instrument: dict[str, dict[str, Any]],
     metric: str,
-    shock_min: float = -0.30,
-    shock_max: float = 0.30,
+    shock_min: float = -0.50,
+    shock_max: float = 0.50,
     step: float = 0.01,
 ) -> dict[str, Any]:
     metric = _normalize_metric(metric)
@@ -151,6 +151,7 @@ def build_portfolio_curve(
 
     point_count = int(round((shock_max - shock_min) / step)) + 1
     shock_values = [round(shock_min + index * step, 10) for index in range(point_count)]
+    display_base_price = _display_base_price(contributions, payoff_contributions, perp_payoff_contributions)
     points = []
     payoff_points = []
     if contributions or flat_greek_contributions:
@@ -169,32 +170,33 @@ def build_portfolio_curve(
                 {
                     "shock": round(shock, 2),
                     "shockPct": _round(shock * 100),
+                    "spotPrice": _shock_price(display_base_price, shock),
                     "value": _round(value),
                 }
             )
     if payoff_contributions or perp_payoff_contributions:
         for shock in shock_values:
             value = 0.0
-            scenario_spot: float | None = None
+            scenario_spot = _shock_price(display_base_price, shock)
             for contribution in payoff_contributions:
                 payoff_inputs = _payoff_inputs(contribution["ticker"])
                 if payoff_inputs is None:
                     continue
                 base_forward, strike, option_type = payoff_inputs
-                scenario_spot = base_forward * (1 + shock)
+                payoff_spot = base_forward * (1 + shock)
                 value += (
-                    _intrinsic_value(scenario_spot, strike, option_type)
+                    _intrinsic_value(payoff_spot, strike, option_type)
                     * contribution["signedQuantity"]
                     + contribution["premiumCashflow"]
                 )
             for contribution in perp_payoff_contributions:
-                scenario_spot = contribution["baseSpot"] * (1 + shock)
-                value += contribution["delta"] * (scenario_spot - contribution["baseSpot"])
+                perp_spot = contribution["baseSpot"] * (1 + shock)
+                value += contribution["delta"] * (perp_spot - contribution["baseSpot"])
             payoff_points.append(
                 {
                     "shock": round(shock, 2),
                     "shockPct": _round(shock * 100),
-                    "spotPrice": _round(scenario_spot),
+                    "spotPrice": scenario_spot,
                     "value": _round(0.0 if abs(value) < 1e-8 else value),
                 }
             )
@@ -204,6 +206,7 @@ def build_portfolio_curve(
         {
             "shock": shock,
             "shockPct": _round(shock * 100),
+            "spotPrice": point_by_shock.get(shock, {"spotPrice": None})["spotPrice"],
             "value": point_by_shock.get(shock, {"value": None})["value"],
         }
         for shock in (-0.2, -0.1, 0.0, 0.1, 0.2)
@@ -212,6 +215,7 @@ def build_portfolio_curve(
         {
             "shock": shock,
             "shockPct": _round(shock * 100),
+            "spotPrice": payoff_point_by_shock.get(shock, {"spotPrice": None})["spotPrice"],
             "value": payoff_point_by_shock.get(shock, {"value": None})["value"],
         }
         for shock in (-0.2, -0.1, 0.0, 0.1, 0.2)
@@ -297,6 +301,32 @@ def _payoff_inputs(ticker: dict[str, Any]) -> tuple[float, float, str] | None:
     if base_forward is None or strike is None or option_type is None:
         return None
     return base_forward, strike, option_type
+
+
+def _display_base_price(
+    contributions: list[dict[str, Any]],
+    payoff_contributions: list[dict[str, Any]],
+    perp_payoff_contributions: list[dict[str, Any]],
+) -> float | None:
+    for contribution in contributions:
+        base_price = _ticker_base_spot(contribution["ticker"])
+        if base_price is not None:
+            return base_price
+    for contribution in payoff_contributions:
+        base_price = _ticker_base_spot(contribution["ticker"])
+        if base_price is not None:
+            return base_price
+    for contribution in perp_payoff_contributions:
+        base_price = _to_float(contribution.get("baseSpot"))
+        if base_price is not None:
+            return base_price
+    return None
+
+
+def _shock_price(base_price: float | None, shock: float) -> float | None:
+    if base_price is None:
+        return None
+    return _round(base_price * (1 + shock))
 
 
 def _ticker_base_spot(ticker: dict[str, Any]) -> float | None:

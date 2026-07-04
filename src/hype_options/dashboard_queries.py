@@ -343,6 +343,7 @@ def _summary_from_payload(payload: dict[str, Any], vol_regime: dict[str, Any]) -
     }
     return {
         "spotPrice": global_metrics.get("spotPrice"),
+        "spotChange24hPct": global_metrics.get("spotChange24hPct"),
         "totalOptionOi": global_metrics.get("totalOptionOi"),
         "totalOptionVolume": global_metrics.get("totalOptionVolume"),
         "putCallVolumeRatio": global_metrics.get("putCallVolumeRatio"),

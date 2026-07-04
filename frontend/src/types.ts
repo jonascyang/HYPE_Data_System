@@ -2,6 +2,7 @@ export type NullableNumber = number | null;
 
 export type Summary = {
   spotPrice: NullableNumber;
+  spotChange24hPct?: NullableNumber;
   totalOptionOi: NullableNumber;
   totalOptionVolume: NullableNumber;
   putCallVolumeRatio: NullableNumber;
@@ -195,17 +196,21 @@ export type OrderFlowFilters = {
 export type DashboardBootstrap = {
   snapshot: Snapshot;
   summary: Summary;
+  snapshotVersion?: string | number;
+  panelVersions?: Record<string, string | number>;
   selectedExpiry: string | null;
   expiries: ExpiryMetric[];
   atmTerm: AtmTerm[];
   skewFly: SkewTerm[];
   ivSmile: IvSmilePoint[];
+  ivSmileByExpiry?: Record<string, IvSmilePoint[]>;
   gexByStrike: GexPoint[];
   gexByExpiry: GexExpiryPoint[];
   oiByStrike: OiStrikePoint[];
   oiByExpiry: OiExpiry[];
   vrpHistory: VrpPoint[];
   volRegime: VolRegime;
+  volRegimeByTenor?: Record<string, VolRegime>;
 };
 
 export type SocketStatus = 'connecting' | 'live' | 'updating' | 'stale' | 'reconnecting' | 'offline';

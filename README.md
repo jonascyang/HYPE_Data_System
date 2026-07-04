@@ -11,12 +11,12 @@ The two projects are intentionally separate. Options data is snapshot-based, hig
 
 | Component | Path | Source | Storage | Output |
 | --- | --- | --- | --- | --- |
-| HYPE options data system | `src/hype_options/` | Derive public API | Turso/libSQL | Normalized tables, derived metrics, dashboard JSON |
+| HYPE options data system | `src/hype_options/` | Derive public API | SQLite or Turso/libSQL | Normalized tables, derived metrics, dashboard JSON |
 | Validator delegation monitor | `validator_monitor_sanitized/` | Hypurrscan API | Local files | CSV, XLSX, summary JSON |
 
 ## HYPE Options Data System
 
-The options system collects recurring HYPE options market snapshots from Derive. Each run discovers active instruments, fetches per-expiry ticker data, normalizes the response into option-level rows, stores the result in Turso/libSQL, calculates derived metrics, and exports dashboard-ready JSON.
+The options system collects recurring HYPE options market snapshots from Derive. Each run discovers active instruments, fetches per-expiry ticker data, normalizes the response into option-level rows, stores the result in SQLite or Turso/libSQL, calculates derived metrics, and exports dashboard-ready JSON.
 
 ```text
 Derive public API
@@ -75,7 +75,7 @@ Requirements:
 
 - Python 3.10+
 - Dependencies in `requirements.txt`
-- Turso credentials only for database-backed options collection
+- SQLite for local/VPS collection, or Turso/libSQL credentials for remote database collection
 
 Install dependencies:
 
@@ -102,7 +102,8 @@ Run database-backed options collection:
 
 ```bash
 cp .env.example .env.local
-# Fill TURSO_DATABASE_URL and TURSO_AUTH_TOKEN in .env.local
+# For VPS/local fallback, keep DATABASE_URL=sqlite:///data/hype_options.sqlite
+# For Turso, set DATABASE_URL and DATABASE_AUTH_TOKEN to your libSQL credentials
 
 PYTHONPATH=src python -m hype_options.cli --env-file .env.local init-db
 PYTHONPATH=src python -m hype_options.cli --env-file .env.local collect-once --expiry-limit 3
@@ -123,7 +124,7 @@ python validator_monitor_sanitized/monitor_validator_delegations.py \
 | Command | Purpose |
 | --- | --- |
 | `dry-run-live` | Fetch live Derive options data and calculate outputs without writing to the database. |
-| `init-db` | Apply `src/hype_options/schema.sql` to the configured Turso/libSQL database. |
+| `init-db` | Apply `src/hype_options/schema.sql` to the configured SQLite or Turso/libSQL database. |
 | `collect-once` | Run one database-backed options collection cycle. |
 | `collect-loop` | Run repeated options collection on a configured interval. |
 | `retention` | Delete rows from short-retention tables according to configured windows. |
@@ -134,7 +135,7 @@ python validator_monitor_sanitized/monitor_validator_delegations.py \
 ```text
 HYPE_Data_System/
 ├── README.md                         # Main repository guide
-├── .env.example                      # Template for Derive, Turso, and retention settings
+├── .env.example                      # Template for Derive, database backend, and retention settings
 ├── .gitignore                        # Excludes local env files, caches, virtualenvs, and runtime outputs
 ├── requirements.txt                  # Python dependencies for both subprojects
 ├── docs/
@@ -151,7 +152,7 @@ HYPE_Data_System/
 │       ├── derive_client.py          # Derive API client
 │       ├── normalizer.py             # API payload to structured option rows
 │       ├── models.py                 # Data objects shared across the package
-│       ├── schema.sql                # Turso/libSQL schema and indexes
+│       ├── schema.sql                # SQLite-compatible schema and indexes
 │       ├── db.py                     # Database connection, schema setup, inserts, and queries
 │       ├── collector.py              # One-cycle collection orchestration
 │       ├── metrics.py                # Options metric calculations
@@ -165,11 +166,15 @@ HYPE_Data_System/
 
 ## Configuration
 
-Database-backed collection reads settings from an env file, normally `.env.local`.
+Database-backed collection reads settings from an env file, normally `.env.local`. For a local or VPS fallback, use SQLite. For Turso/libSQL, set the same `DATABASE_URL` and `DATABASE_AUTH_TOKEN` fields to the hosted database credentials. Legacy `TURSO_DATABASE_URL` and `TURSO_AUTH_TOKEN` are still accepted.
 
 ```text
-TURSO_DATABASE_URL=libsql://your-database.turso.io
-TURSO_AUTH_TOKEN=replace_with_your_token
+DATABASE_URL=sqlite:///data/hype_options.sqlite
+DATABASE_AUTH_TOKEN=
+
+# Turso/libSQL also works:
+# DATABASE_URL=libsql://your-database.turso.io
+# DATABASE_AUTH_TOKEN=replace_with_your_token
 
 DERIVE_BASE_URL=https://api.lyra.finance
 DERIVE_CURRENCY=HYPE
@@ -182,3 +187,23 @@ COLLECTION_RUN_RETENTION_DAYS=90
 ```
 
 Local output directories are generated at runtime and are not part of the source tree.
+
+## HYPE Options Dashboard UI
+
+The repository now includes an optional realtime dashboard frontend in `frontend/` and a FastAPI dashboard API in `src/hype_options/api.py`.
+
+Run the API server:
+
+```bash
+PYTHONPATH=src python -m hype_options.cli --env-file .env.local serve-dashboard --host 127.0.0.1 --port 8000
+```
+
+Run the frontend:
+
+```bash
+cd frontend
+npm install
+npm run dev
+```
+
+The dashboard uses REST for first-load bootstrap and `WS /ws/options` for automatic updates. There is no main refresh workflow; the header reports live/stale/reconnecting state. Expiry and window controls are local to each chart panel.

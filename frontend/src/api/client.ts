@@ -17,23 +17,52 @@ import type {
   VolRegime,
   WalletLookupResponse,
 } from '../types';
+import { markPerf, measurePerf, reportPerfSample } from '../perf';
 
 const json = async <T>(url: string, signal?: AbortSignal): Promise<T> => {
+  const requestStart = markPerf();
   const response = await fetch(url, { signal });
+  measureApiResponse(url, requestStart, response);
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-  return response.json() as Promise<T>;
+  return parseJson<T>(url, response);
 };
 
 const postJson = async <T>(url: string, body: unknown, signal?: AbortSignal): Promise<T> => {
+  const requestStart = markPerf();
   const response = await fetch(url, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
     signal,
   });
+  measureApiResponse(url, requestStart, response);
   if (!response.ok) throw new Error(`${response.status} ${response.statusText}`);
-  return response.json() as Promise<T>;
+  return parseJson<T>(url, response);
 };
+
+const parseJson = async <T>(url: string, response: Response): Promise<T> => {
+  const parseStart = markPerf();
+  const payload = await response.json() as T;
+  measurePerf('api.json_parse', parseStart, { endpoint: endpointLabel(url) });
+  return payload;
+};
+
+function measureApiResponse(url: string, startMs: number | null, response: Response) {
+  const serverDuration = Number(response.headers.get('X-Response-Time-Ms'));
+  measurePerf('api.request', startMs, {
+    endpoint: endpointLabel(url),
+    status: response.status,
+    serverMs: Number.isFinite(serverDuration) ? serverDuration : null,
+  });
+  if (Number.isFinite(serverDuration)) {
+    reportPerfSample('api.server', serverDuration, { endpoint: endpointLabel(url) });
+  }
+}
+
+function endpointLabel(url: string) {
+  const [path] = url.split('?');
+  return path;
+}
 
 export const getBootstrap = (signal?: AbortSignal) => json<DashboardBootstrap>('/api/options/dashboard/bootstrap', signal);
 export const getIvSmile = (expiry: string, signal?: AbortSignal) => json<IvSmilePoint[]>(`/api/options/iv-smile?expiry=${encodeURIComponent(expiry)}`, signal);

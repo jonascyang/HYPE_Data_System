@@ -1,16 +1,18 @@
 from __future__ import annotations
 
 import asyncio
+import json
 import time
 from dataclasses import dataclass, field
 from datetime import UTC, datetime, timedelta, timezone
 from threading import Lock
 from typing import Any, Awaitable, Callable
 
-from hype_options.dashboard_data import _vrp_history
+from hype_options.dashboard_data import _spot_change_24h_pct, _vrp_history
 from hype_options.dashboard_read_model import (
     RuntimeDashboardSnapshot,
     dashboard_panel_payloads,
+    payload_revision,
     vol_regime_from_terms,
 )
 from hype_options.db import Repository, apply_options_history_schema, connect_database
@@ -47,6 +49,7 @@ CHANGE_LOOKUP_TOLERANCE_MS = 20 * 60 * 1000
 class ClientState:
     websocket: WebSocket
     panels: dict[str, dict[str, Any]] = field(default_factory=dict)
+    revisions: dict[str, str] = field(default_factory=dict)
 
 
 class DashboardConnectionManager:
@@ -68,7 +71,10 @@ class DashboardConnectionManager:
         state = self._clients.get(id(websocket))
         if state is None:
             return
-        state.panels[panel] = params or {}
+        next_params = params or {}
+        if state.panels.get(panel) != next_params:
+            state.revisions.pop(panel, None)
+        state.panels[panel] = next_params
 
     def subscribe_many(self, websocket: WebSocket, panels: list[str], params: dict[str, Any] | None = None) -> None:
         for panel in panels:
@@ -109,14 +115,24 @@ class DashboardConnectionManager:
                 "skewFly": {},
                 "oiByExpiry": {},
             }
+            build_start = time.perf_counter()
+            payload = payload_builder(panels)
+            build_ms = (time.perf_counter() - build_start) * 1000
+            changed_payload, changed_revisions = changed_panel_payloads(state, payload)
+            if not changed_payload:
+                continue
             try:
                 await state.websocket.send_json(
                     {
                         "type": message_type,
                         "snapshotId": snapshot_id,
-                        "payload": payload_builder(panels),
+                        "payload": changed_payload,
+                        "revisions": changed_revisions,
+                        "serverBuildMs": round(build_ms, 3),
+                        "payloadBytes": payload_size_bytes(changed_payload),
                     }
                 )
+                state.revisions.update(changed_revisions)
             except WebSocketDisconnect:
                 dead.append(state.websocket)
             except RuntimeError:
@@ -137,20 +153,60 @@ class DashboardConnectionManager:
             if panel not in state.panels:
                 continue
             params = state.panels.get(panel) or {}
+            build_start = time.perf_counter()
+            payload = {panel: payload_builder(params)}
+            build_ms = (time.perf_counter() - build_start) * 1000
+            changed_payload, changed_revisions = changed_panel_payloads(state, payload)
+            if not changed_payload:
+                continue
             try:
                 await state.websocket.send_json(
                     {
                         "type": message_type,
                         "snapshotId": snapshot_id,
-                        "payload": {panel: payload_builder(params)},
+                        "payload": changed_payload,
+                        "revisions": changed_revisions,
+                        "serverBuildMs": round(build_ms, 3),
+                        "payloadBytes": payload_size_bytes(changed_payload),
                     }
                 )
+                state.revisions.update(changed_revisions)
             except WebSocketDisconnect:
                 dead.append(state.websocket)
             except RuntimeError:
                 dead.append(state.websocket)
         for websocket in dead:
             self.disconnect(websocket)
+
+
+def changed_panel_payloads(
+    state: ClientState,
+    payload: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, str]]:
+    changed_payload: dict[str, Any] = {}
+    changed_revisions: dict[str, str] = {}
+    for panel, value in payload.items():
+        revision = panel_payload_revision(value)
+        if state.revisions.get(panel) == revision:
+            continue
+        changed_payload[panel] = value
+        changed_revisions[panel] = revision
+    return changed_payload, changed_revisions
+
+
+def panel_payload_revision(value: Any) -> str:
+    return payload_revision(value)
+
+
+def payload_size_bytes(value: Any) -> int:
+    return len(
+        json.dumps(
+            value,
+            sort_keys=True,
+            separators=(",", ":"),
+            default=str,
+        ).encode("utf-8")
+    )
 
 
 @dataclass(frozen=True)
@@ -331,6 +387,16 @@ def build_realtime_dashboard_snapshot(
         lookback_days=lookback_days,
         latest_ts_ms=latest_ts_ms,
     )
+    vol_regime_by_tenor = {
+        tenor: vol_regime_from_terms(
+            current_terms=[_atm_term_dict(row) for row in atm_terms],
+            history_rows=history_term_rows,
+            tenor=tenor,
+            lookback_days=lookback_days,
+            latest_ts_ms=latest_ts_ms,
+        )
+        for tenor in ("1W", "1M", "3M", "6M")
+    }
     atm_term = _atm_iv_table(
         current_terms=atm_terms,
         global_metric=current_global_metric,
@@ -342,7 +408,14 @@ def build_realtime_dashboard_snapshot(
         history_rows=history_expiry_rows,
         latest_ts_ms=latest_ts_ms,
     )
-    summary = _summary_from_current(current_global_metric, atm_term, vol_regime)
+    summary = _summary_from_current(
+        current_global_metric,
+        atm_term,
+        vol_regime,
+        price_history=history_price_rows,
+        current_price=current_price,
+        latest_ts_ms=latest_ts_ms,
+    )
     bootstrap = {
         "snapshot": {
             "latestTsMs": latest_ts_ms,
@@ -367,6 +440,7 @@ def build_realtime_dashboard_snapshot(
             max_history_points=720,
         ),
         "volRegime": vol_regime,
+        "volRegimeByTenor": vol_regime_by_tenor,
     }
     if summary.get("spotPrice") is None and current_price is not None:
         summary["spotPrice"] = current_price
@@ -416,10 +490,22 @@ def _spot_price(result) -> float | None:
     return None
 
 
-def _summary_from_current(global_metric, atm_term: list[dict[str, Any]], vol_regime: dict[str, Any]) -> dict[str, Any]:
+def _summary_from_current(
+    global_metric,
+    atm_term: list[dict[str, Any]],
+    vol_regime: dict[str, Any],
+    *,
+    price_history: list[dict[str, Any]] | None = None,
+    current_price: float | None = None,
+    latest_ts_ms: int | None = None,
+) -> dict[str, Any]:
     atm_by_tenor = {row.get("tenor"): row.get("atmIv") for row in atm_term}
+    spot_price = _nullable_attr(global_metric, "spot_price")
+    if spot_price is None:
+        spot_price = current_price
     return {
-        "spotPrice": _nullable_attr(global_metric, "spot_price"),
+        "spotPrice": spot_price,
+        "spotChange24hPct": _spot_change_24h_pct(price_history or [], spot_price, latest_ts_ms) if latest_ts_ms is not None else None,
         "totalOptionOi": _num_attr(global_metric, "total_option_oi"),
         "totalOptionVolume": _num_attr(global_metric, "total_option_volume"),
         "putCallVolumeRatio": _nullable_attr(global_metric, "put_call_volume_ratio"),

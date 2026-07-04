@@ -4,6 +4,7 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "frontend/src/App.tsx").read_text()
 ECHART = (ROOT / "frontend/src/components/EChart.tsx").read_text()
+API_CLIENT = (ROOT / "frontend/src/api/client.ts").read_text()
 GREEK_SIMULATOR = (ROOT / "frontend/src/components/GreekSimulator.tsx").read_text()
 STRATEGY_SIMULATOR = (ROOT / "frontend/src/components/StrategySimulator.tsx").read_text()
 KPI_STRIP = (ROOT / "frontend/src/components/KpiStrip.tsx").read_text()
@@ -28,6 +29,31 @@ def test_line_charts_redraw_with_line_drawing_animation() -> None:
     assert ".chart-host.line-drawing-active .highcharts-graph" in STYLES
     assert "@keyframes line-drawing" in STYLES
     assert "stroke-dashoffset: var(--line-length" in STYLES
+
+
+def test_dashboard_performance_observability_hooks_exist() -> None:
+    socket_hook = (ROOT / "frontend/src/hooks/useDashboardSocket.ts").read_text()
+    assert "measurePerf('interaction.route_switch'" in APP
+    assert "measurePerf('interaction.expiry_select'" in APP
+    assert "measurePerf('interaction.tenor_select'" in APP
+    assert "measurePerf('interaction.oi_strike_side'" in APP
+    assert "measurePerf('interaction.order_flow_filter_input'" in APP
+    assert "chart.option.iv_smile" in APP
+    assert "measurePerf('api.request'" in API_CLIENT
+    assert "X-Response-Time-Ms" in API_CLIENT
+    assert "serverBuildMs" in socket_hook
+    assert "payloadBytes" in socket_hook
+    assert "measurePerf('ws.receive_to_merge'" in socket_hook
+
+
+def test_market_dashboard_uses_snapshot_cache_for_fast_switches() -> None:
+    assert "payload.ivSmileByExpiry" in APP
+    assert "data?.ivSmileByExpiry?.[ivSmileExpiry]" in APP
+    assert "interaction.expiry_change.cache" in APP
+    assert "payload.volRegimeByTenor" in APP
+    assert "volRegimeByTenor[volTenor]" in APP
+    assert "interaction.tenor_change.cache" in APP
+    assert "setVolRegimeByTenor" in APP
 
 
 def test_numeric_values_use_text_morph_animation() -> None:
@@ -63,7 +89,8 @@ def test_dashboard_display_metadata_makes_units_and_history_rules_explicit() -> 
 
 def test_expiry_colors_are_stable_and_multi_expiry_tooltips_are_capped() -> None:
     options = (ROOT / "frontend/src/charts/options.ts").read_text()
-    assert "expiryColorIndex(expiry)" in options
+    assert "expiries.map((expiry, expiryIndex)" in options
+    assert "colorIndex: expiryIndex % 12" in options
     assert "sortExpiries(rows.map((row) => row.expiry))" in options
     assert "MULTI_SERIES_TOOLTIP_LIMIT" in options
     assert "+${hidden} more" in options
@@ -220,6 +247,16 @@ def test_chart_tooltips_use_explicit_point_x_labels() -> None:
     assert "tooltipLabel(this)" in greeks
     assert "header(String(this.x" not in greeks
     assert "rows[this.point?.index ?? 0]" not in options
+
+
+def test_greek_curves_use_price_axis_with_fixed_price_ticks() -> None:
+    greeks = (ROOT / "frontend/src/charts/greeks.ts").read_text()
+    assert "const PRICE_TICK_INTERVAL = 5" in greeks
+    assert "type: 'linear'" in greeks
+    assert "tickInterval: PRICE_TICK_INTERVAL" in greeks
+    assert "categories: rows.map(shockLabel)" not in greeks
+    assert "Price ${priceLabel(spotPrice)}" in greeks
+    assert "Move ${this.point.custom.shockLabel}" in greeks
 
 
 def test_order_flow_removes_leg_structure_filter_badge() -> None:

@@ -1,0 +1,277 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-06-27T20:03:35.313315+00:00",
+  "title": "Design System: HYPE Options Dashboard",
+  "extensions": {
+    "colorMeta": {
+      "terminal-bg": {
+        "role": "neutral",
+        "displayName": "Terminal Black",
+        "canonical": "#0d0d0d",
+        "tonalRamp": [
+          "oklch(15% 0 0)",
+          "oklch(22% 0 0)",
+          "oklch(32% 0 0)",
+          "oklch(44% 0 0)",
+          "oklch(58% 0 0)",
+          "oklch(72% 0 0)",
+          "oklch(86% 0 0)",
+          "oklch(95% 0 0)"
+        ]
+      },
+      "terminal-ink": {
+        "role": "neutral",
+        "displayName": "Terminal Ink",
+        "canonical": "#f2f2f2",
+        "tonalRamp": [
+          "oklch(18% 0 0)",
+          "oklch(28% 0 0)",
+          "oklch(40% 0 0)",
+          "oklch(54% 0 0)",
+          "oklch(68% 0 0)",
+          "oklch(80% 0 0)",
+          "oklch(90% 0 0)",
+          "oklch(96% 0 0)"
+        ]
+      },
+      "data-blue": {
+        "role": "primary",
+        "displayName": "Data Blue",
+        "canonical": "#2962ff",
+        "tonalRamp": [
+          "oklch(18% 0.10 265)",
+          "oklch(28% 0.14 265)",
+          "oklch(39% 0.18 265)",
+          "oklch(50% 0.22 265)",
+          "oklch(60% 0.24 265)",
+          "oklch(72% 0.19 265)",
+          "oklch(84% 0.12 265)",
+          "oklch(94% 0.05 265)"
+        ]
+      },
+      "data-cyan": {
+        "role": "secondary",
+        "displayName": "Data Cyan",
+        "canonical": "#26c6da",
+        "tonalRamp": [
+          "oklch(18% 0.07 210)",
+          "oklch(28% 0.10 210)",
+          "oklch(40% 0.12 210)",
+          "oklch(54% 0.13 210)",
+          "oklch(66% 0.12 210)",
+          "oklch(78% 0.10 210)",
+          "oklch(88% 0.06 210)",
+          "oklch(95% 0.03 210)"
+        ]
+      },
+      "data-purple": {
+        "role": "secondary",
+        "displayName": "Data Purple",
+        "canonical": "#d568fb",
+        "tonalRamp": [
+          "oklch(18% 0.09 315)",
+          "oklch(30% 0.13 315)",
+          "oklch(42% 0.17 315)",
+          "oklch(55% 0.21 315)",
+          "oklch(67% 0.18 315)",
+          "oklch(78% 0.13 315)",
+          "oklch(88% 0.08 315)",
+          "oklch(95% 0.04 315)"
+        ]
+      },
+      "success-green": {
+        "role": "state",
+        "displayName": "Live Green",
+        "canonical": "#00c805",
+        "tonalRamp": [
+          "oklch(18% 0.08 145)",
+          "oklch(30% 0.11 145)",
+          "oklch(42% 0.14 145)",
+          "oklch(55% 0.17 145)",
+          "oklch(68% 0.16 145)",
+          "oklch(80% 0.11 145)",
+          "oklch(90% 0.06 145)",
+          "oklch(96% 0.03 145)"
+        ]
+      },
+      "danger-red": {
+        "role": "state",
+        "displayName": "Risk Red",
+        "canonical": "#fa5000",
+        "tonalRamp": [
+          "oklch(18% 0.09 35)",
+          "oklch(30% 0.13 35)",
+          "oklch(42% 0.17 35)",
+          "oklch(55% 0.21 35)",
+          "oklch(66% 0.19 35)",
+          "oklch(78% 0.13 35)",
+          "oklch(88% 0.07 35)",
+          "oklch(95% 0.03 35)"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Numeric Display",
+        "purpose": "KPI values and primary numeric summaries."
+      },
+      "headline": {
+        "displayName": "Terminal Header",
+        "purpose": "Brand and high-priority persistent labels."
+      },
+      "title": {
+        "displayName": "Chart Title",
+        "purpose": "Chart titles and compact panel headings."
+      },
+      "body": {
+        "displayName": "Base UI Text",
+        "purpose": "General UI text and inherited control text."
+      },
+      "label": {
+        "displayName": "Dense Label",
+        "purpose": "KPI labels, strip labels, axis labels, and status support."
+      }
+    },
+    "shadows": [
+      {
+        "name": "tooltip-drop",
+        "value": "drop-shadow(0 .25rem .125rem rgba(0,0,0,.16))",
+        "purpose": "Separate chart tooltips from the plot area."
+      },
+      {
+        "name": "status-glow",
+        "value": "0 0 0 .25rem rgba(...)",
+        "purpose": "Reinforce live, updating, stale, and offline status dots."
+      }
+    ],
+    "motion": [
+      {
+        "name": "state-fast",
+        "value": "150ms-200ms ease",
+        "purpose": "Panel hover, control hover, and status changes."
+      },
+      {
+        "name": "chart-update",
+        "value": "0ms Highcharts animation",
+        "purpose": "Realtime updates should feel immediate rather than choreographed."
+      }
+    ],
+    "breakpoints": [
+      {
+        "name": "single-column-charts",
+        "value": "1100px"
+      },
+      {
+        "name": "mobile-controls",
+        "value": "680px"
+      }
+    ]
+  },
+  "components": [
+    {
+      "name": "Segment Control",
+      "kind": "button",
+      "refersTo": "segment-control-active",
+      "description": "Compact local chart filter with inverted active state.",
+      "html": "<div class=\"ds-segment\"><button>Total</button><button class=\"is-active\">Call</button><button>Put</button></div>",
+      "css": ".ds-segment{height:1.75rem;display:inline-flex;border:2px solid var(--border-color,#ffffff1a);border-radius:1rem;overflow:clip;background:var(--background,#0d0d0d);font-family:Outfit,sans-serif}.ds-segment button{min-width:2.35rem;height:1.5rem;padding:0 .5rem;color:var(--color,#f2f2f2);opacity:.55;background:transparent;border:0;font-size:.75rem;line-height:1.5rem;transition:opacity .2s,background .2s,color .2s}.ds-segment button:hover{opacity:1;background:rgba(242,242,242,.05)}.ds-segment .is-active{opacity:1;color:var(--background,#0d0d0d);background:var(--color,#f2f2f2)}"
+    },
+    {
+      "name": "Select Control",
+      "kind": "input",
+      "refersTo": "select-control",
+      "description": "Chart-local select for expiry or window controls.",
+      "html": "<label class=\"ds-select\"><span>Expiry</span><select><option>2026/07/03</option></select></label>",
+      "css": ".ds-select{height:1.75rem;display:inline-flex;align-items:center;gap:.35rem;color:var(--terminal-muted,#f2f2f28c);font-size:.75rem;line-height:1;position:relative;font-family:Outfit,sans-serif}.ds-select select{appearance:none;height:1.75rem;color:var(--color,#f2f2f2);background:var(--background,#0d0d0d);border:2px solid var(--border-color,#ffffff1a);border-radius:.375rem;outline:none;padding:0 1.55rem 0 .5rem;transition:border-color .2s}.ds-select select:hover,.ds-select select:focus{border-color:var(--color,#f2f2f2)}.ds-select:after{content:\"\";pointer-events:none;width:.45rem;height:.45rem;border-right:1.5px solid var(--color,#f2f2f2);border-bottom:1.5px solid var(--color,#f2f2f2);opacity:.65;position:absolute;right:.55rem;top:50%;transform:translateY(-65%) rotate(45deg)}"
+    },
+    {
+      "name": "Chart Panel",
+      "kind": "card",
+      "refersTo": "chart-panel",
+      "description": "Flat terminal container for a Highcharts SVG plot and chart-local controls.",
+      "html": "<section class=\"ds-chart-panel\"><div class=\"ds-chart-title\">ATM IV Term Structure</div><div class=\"ds-chart-gridline\"></div></section>",
+      "css": ".ds-chart-panel{position:relative;height:220px;background:var(--background,#0d0d0d);border:2px solid var(--border-color,#ffffff1a);border-radius:.25rem;overflow:clip;font-family:Outfit,sans-serif;color:var(--color,#f2f2f2);transition:border-color .2s}.ds-chart-panel:hover{border-color:var(--border-strong,#ffffff33)}.ds-chart-title{text-align:center;font-size:.86rem;line-height:1.2rem;font-weight:400;margin-top:.6rem}.ds-chart-gridline{position:absolute;left:2rem;right:1rem;top:50%;border-top:1px solid rgba(242,242,242,.075)}"
+    },
+    {
+      "name": "KPI Strip Cell",
+      "kind": "card",
+      "refersTo": "kpi-cell",
+      "description": "Dense metric cell inside the continuous KPI strip.",
+      "html": "<div class=\"ds-kpi\"><div class=\"ds-kpi-label\">Total Option OI (contracts)</div><div class=\"ds-kpi-value\">12.4K</div></div>",
+      "css": ".ds-kpi{min-height:3.5rem;background:var(--background,#0d0d0d);padding:.5rem .75rem;border-right:2px solid var(--border-color,#ffffff1a);font-family:Outfit,sans-serif;color:var(--color,#f2f2f2);transition:background .2s}.ds-kpi:hover{background:rgba(242,242,242,.035)}.ds-kpi-label{color:var(--terminal-muted,#f2f2f28c);font-size:.7rem;line-height:1rem;font-weight:400;text-transform:uppercase}.ds-kpi-value{font-size:1.18rem;line-height:1.55rem;margin-top:.1rem;font-weight:400;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}"
+    },
+    {
+      "name": "Highcharts Tooltip",
+      "kind": "custom",
+      "refersTo": "tooltip",
+      "description": "Dark SVG tooltip treatment used for chart hover values.",
+      "html": "<div class=\"ds-tooltip\"><div class=\"ds-tooltip-date\">2026/07/03</div><div><span class=\"ds-dot\"></span>ATM IV: 64.2%</div></div>",
+      "css": ".ds-tooltip{display:inline-flex;flex-direction:column;gap:.15rem;background:var(--background,#0d0d0d);color:var(--color,#f2f2f2);border:1px solid var(--color,#f2f2f2);border-radius:.25rem;padding:7px 9px;font-family:Outfit,sans-serif;font-size:.85rem;filter:drop-shadow(0 .25rem .125rem rgba(0,0,0,.16))}.ds-tooltip-date{font-size:.75rem;opacity:.9}.ds-dot{display:inline-block;width:.45rem;height:.45rem;border-radius:50%;background:var(--blue,#2962ff);margin-right:.35rem}"
+    },
+    {
+      "name": "Top Bar Status",
+      "kind": "nav",
+      "refersTo": "topbar-status",
+      "description": "Persistent live/stale/reconnecting state and latest snapshot timestamp.",
+      "html": "<div class=\"ds-status\"><span class=\"ds-status-dot live\"></span><span>Live</span><span class=\"ds-muted\">Snapshot 2026/06/28 03:46</span></div>",
+      "css": ".ds-status{height:2.5rem;display:flex;align-items:center;gap:.5rem;padding-left:.75rem;border-left:2px solid var(--border-color,#ffffff1a);font-family:Outfit,sans-serif;font-size:.75rem;color:var(--color,#f2f2f2);white-space:nowrap}.ds-status-dot{width:.375rem;height:.375rem;border-radius:50%;background:var(--terminal-muted,#f2f2f28c)}.ds-status-dot.live{background:var(--green,#00c805);box-shadow:0 0 0 .25rem rgba(0,200,5,.10)}.ds-muted{color:var(--terminal-muted,#f2f2f28c)}"
+    }
+  ],
+  "narrative": {
+    "northStar": "Institutional Volatility Console",
+    "overview": "The system is a black, high-density market surface built for traders who need to read volatility, positioning, and flow without being slowed down by decorative UI. It should feel like a serious options terminal: precise, compact, technical, and quietly premium.",
+    "keyCharacteristics": [
+      "Black terminal surface with thin white-alpha strokes and minimal tonal layering.",
+      "High information density with local controls placed beside the chart they affect.",
+      "Highcharts SVG chart language: thin rounded lines, small circular points, dark SVG tooltips, and restrained data colors.",
+      "One technical sans family, Outfit, used across labels, titles, numbers, controls, and chart text.",
+      "Honest state language: live, stale, reconnecting, unavailable, and insufficient-history states are part of the design system."
+    ],
+    "rules": [
+      {
+        "name": "The Data-Role Rule",
+        "body": "Every saturated color must explain a data category, a state, or a selected control. If the color is only making the page feel more exciting, remove it.",
+        "section": "colors"
+      },
+      {
+        "name": "The Black Surface Rule",
+        "body": "Panels, toolbars, charts, and tooltips stay on Terminal Black. Depth comes from border strength, text hierarchy, and chart geometry, not from stacked gray cards.",
+        "section": "colors"
+      },
+      {
+        "name": "The No Display Drama Rule",
+        "body": "This is a product surface. Do not introduce oversized marketing headings, fluid hero type, or display-font labels.",
+        "section": "typography"
+      },
+      {
+        "name": "The Numeric Clarity Rule",
+        "body": "Numbers must be formatted for scanning: compact units for large values, percentages with controlled decimals, and dates as yyyy/mm/dd when shown to users.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Terminal Rule",
+        "body": "Surfaces are flat at rest. If a panel needs emphasis, strengthen the border or improve hierarchy; do not add a soft card shadow.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do keep the surface black, dense, and terminal-like. This product is for traders reading live market structure.",
+      "Do use saturated colors only for chart roles, semantic state, or selected controls.",
+      "Do keep chart controls local to the chart panel they affect.",
+      "Do label units directly in KPI titles, table headers, or tooltips.",
+      "Do show stale, reconnecting, unavailable, and insufficient-history states honestly.",
+      "Do preserve Highcharts-style SVG tooltips, thin rounded line strokes, small circle markers, and restrained axis labels.",
+      "Do test text and chart labels on mobile so controls, annotations, and titles do not overlap."
+    ],
+    "donts": [
+      "Don't use generic SaaS dashboard card grids.",
+      "Don't use marketing-page composition, oversized hero sections, or homepage-style value propositions inside the dashboard.",
+      "Don't reduce information density to make the surface feel friendlier; improve structure instead.",
+      "Don't add ornamental gradients, glass effects, decorative shadows, or arbitrary colorful accents.",
+      "Don't make unavailable or statistically weak metrics look complete.",
+      "Don't rely on red/green alone to communicate call/put or positive/negative meaning; pair it with labels, legends, signs, or position.",
+      "Don't add soft card shadows to bordered panels. That breaks the terminal material.",
+      "Don't introduce display fonts, novelty mono labels, or fluid hero typography into operational UI."
+    ]
+  }
+}

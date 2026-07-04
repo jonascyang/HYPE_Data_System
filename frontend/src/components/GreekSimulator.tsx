@@ -132,6 +132,7 @@ export function GreekSimulator({
     <div className="simulator-stack">
       <section className="change-panel simulator-control-panel">
         <div className="panel-heading-row">
+          <h2>Simulator Controls</h2>
           <span role="status" aria-live="polite">{optionsLoading ? 'Loading options' : optionsError ?? `${options.length} instruments`}</span>
         </div>
         <div className="simulator-controls">
@@ -157,6 +158,17 @@ export function GreekSimulator({
         </div>
         {error && <div className="panel-inline-error" role="alert">{error}</div>}
         <div className="greek-leg-list" aria-label="Added option legs">
+          {greekLegs.length > 0 && (
+            <div className="greek-leg-header" aria-hidden="true">
+              <span>#</span>
+              <span>Expiry</span>
+              <span>Strike / Type</span>
+              <span>Side</span>
+              <span>Qty</span>
+              <span>Est. Premium</span>
+              <span />
+            </div>
+          )}
           {greekLegs.length === 0 ? (
             <div className="greek-leg-empty">No options added</div>
           ) : greekLegs.map((leg, index) => (

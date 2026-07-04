@@ -43,8 +43,8 @@ class PortfolioRiskTest(unittest.TestCase):
         self.assertEqual(result["summary"]["totalDelta"], 1.0)
         self.assertEqual(result["summary"]["positionCount"], 1)
         self.assertEqual(set(result["curves"]), {"delta", "gamma", "vega", "theta"})
-        self.assertEqual(len(result["curve"]["points"]), 61)
-        self.assertEqual(len(result["payoffCurve"]["points"]), 61)
+        self.assertEqual(len(result["curve"]["points"]), 101)
+        self.assertEqual(len(result["payoffCurve"]["points"]), 101)
 
     def test_rejects_cross_asset_portfolio(self) -> None:
         with self.assertRaisesRegex(ValueError, SINGLE_ASSET_ERROR):
@@ -106,7 +106,7 @@ class PortfolioRiskTest(unittest.TestCase):
         self.assertEqual(result["greeks"]["totalDelta"], -1.5)
         self.assertEqual(result["legs"][0]["optionType"], "call")
         self.assertEqual(set(result["curves"]), {"delta", "gamma", "vega", "theta"})
-        self.assertEqual(len(result["payoffCurve"]["points"]), 61)
+        self.assertEqual(len(result["payoffCurve"]["points"]), 101)
 
 
 if __name__ == "__main__":

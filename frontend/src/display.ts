@@ -1,4 +1,4 @@
-import { formatCompact, formatContracts, formatGex, formatNumber, formatRatio, formatVol } from './format';
+import { formatCompact, formatContracts, formatGex, formatNumber, formatPercent, formatRatio, formatVol } from './format';
 
 export const MIN_RANK_SAMPLES = 30;
 export const MULTI_SERIES_TOOLTIP_LIMIT = 6;
@@ -12,6 +12,8 @@ export type KpiDisplay = {
   label: string;
   unit: string;
   value: string;
+  change?: string;
+  changeTone?: 'up' | 'down' | 'neutral';
   raw: number | null | undefined;
   tone: MetricTone;
   flash: 'directional' | 'neutral';
@@ -28,6 +30,8 @@ export const formatKpiDisplay = (
       label: 'HYPE Spot',
       unit: 'USD',
       value: value == null ? '-' : `$${formatNumber(value, 2)}`,
+      change: secondaryValue == null ? undefined : `24H ${secondaryValue > 0 ? '+' : ''}${formatPercent(secondaryValue, 2)}`,
+      changeTone: secondaryValue == null || secondaryValue === 0 ? 'neutral' : secondaryValue > 0 ? 'up' : 'down',
       raw: value,
       tone: 'neutral',
       flash: 'directional',

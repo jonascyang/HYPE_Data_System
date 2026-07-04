@@ -1,7 +1,7 @@
 import type { Options, SeriesOptionsType } from 'highcharts';
 import type { AtmTerm, GexExpiryPoint, GexPoint, IvSmilePoint, OiExpiry, OiStrikePoint } from '../types';
 import { formatCompact, formatContracts, formatExpiry, formatGex, formatStrike, formatVol } from '../format';
-import { expiryColorIndex, formatChartValue, MULTI_SERIES_TOOLTIP_LIMIT, sortExpiries } from '../display';
+import { formatChartValue, MULTI_SERIES_TOOLTIP_LIMIT, sortExpiries } from '../display';
 
 const br = '<tspan class="highcharts-br">&ZeroWidthSpace;</tspan>';
 
@@ -31,17 +31,17 @@ const axisTitleStyle = { fontSize: '0.62rem', fontWeight: '400', textTransform: 
 
 const categoryAxis = (categories: string[], plotLines?: any[], title = 'Strike'): Options['xAxis'] => ({
   categories,
-  title: { text: title, style: axisTitleStyle },
+  title: { text: title, style: axisTitleStyle, margin: 5 },
   crosshair: { className: 'highcharts-crosshair-x', snap: true },
   tickLength: 0,
   lineWidth: 1,
-  labels: { style: axisLabelStyle },
+  labels: { style: axisLabelStyle, y: 14 },
   plotLines,
 });
 
-const valueAxis = (formatter: (value: number) => string, title: string, plotLines?: any[]): Options['yAxis'] => ({
+const valueAxis = (formatter: (value: number) => string, _title: string, plotLines?: any[]): Options['yAxis'] => ({
   opposite: true,
-  title: { text: title, align: 'high', rotation: 0, offset: 0, y: -7, style: axisTitleStyle },
+  title: { text: '' },
   tickLength: 0,
   lineWidth: 0,
   gridLineWidth: 1,
@@ -61,12 +61,12 @@ const base = (title: string, className = ''): Options => ({
     className: ['hype-chart', className].filter(Boolean).join(' '),
     styledMode: true,
     animation: false,
-    spacingTop: 13,
-    spacingRight: 24,
-    spacingBottom: 38,
-    spacingLeft: 8,
+    spacingTop: 8,
+    spacingRight: 14,
+    spacingBottom: 12,
+    spacingLeft: 4,
   },
-  title: { text: title, align: 'left', x: 8, y: 15 },
+  title: { text: title, align: 'left', x: 8, y: 14 },
   credits: { enabled: false },
   exporting: { enabled: false },
   legend: {
@@ -89,6 +89,22 @@ const base = (title: string, className = ''): Options => ({
     column: { borderRadius: 0, pointPadding: 0.16, groupPadding: 0.08, borderWidth: 0 },
   },
 });
+
+const expiryLegend: Options['legend'] = {
+  layout: 'vertical',
+  align: 'right',
+  verticalAlign: 'middle',
+  floating: false,
+  symbolRadius: 0,
+  symbolHeight: 7,
+  symbolWidth: 12,
+  itemMarginTop: 1,
+  itemMarginBottom: 1,
+  padding: 0,
+  x: 2,
+  y: 10,
+  itemStyle: { fontWeight: '200', fontSize: '0.62rem' },
+};
 
 const percentAxis = (value: number) => `${formatCompact(value, 1)}%`;
 const compactAxis = (value: number) => formatCompact(value);
@@ -175,8 +191,49 @@ const linePointTooltip = (unitFormatter: (value: number) => string) => tooltip(f
   return `${header(label)}${br}${pointLine(String(colorClass), `${this.series.name}: ${value}`)}`;
 });
 
+const strikeNavigator = (values: Array<number | null | undefined>): Pick<Options, 'navigator' | 'scrollbar' | 'rangeSelector'> => ({
+  rangeSelector: { enabled: false },
+  scrollbar: { enabled: false },
+  navigator: {
+    enabled: true,
+    baseSeries: '__hype_navigator_data__',
+    adaptToUpdatedData: true,
+    height: 20,
+    margin: 4,
+    maskInside: false,
+    outlineWidth: 1,
+    handles: {
+      enabled: true,
+      width: 8,
+      height: 16,
+      borderRadius: 0,
+    },
+    series: {
+      type: 'areaspline',
+      data: values.map((value, index) => [index, value ?? 0]),
+      dataGrouping: { enabled: false },
+      lineWidth: 1,
+      fillOpacity: 0.08,
+      marker: { enabled: false },
+      enableMouseTracking: false,
+    } as any,
+    xAxis: {
+      labels: { enabled: false },
+      tickLength: 0,
+      lineWidth: 0,
+      gridLineWidth: 0,
+    },
+    yAxis: {
+      labels: { enabled: false },
+      gridLineWidth: 0,
+      title: { text: '' },
+    },
+  },
+});
+
 export const termStructureOption = (rows: AtmTerm[]): Options => ({
   ...base('ATM IV Term Structure', 'term-structure-chart'),
+  legend: { enabled: false },
   xAxis: categoryAxis(rows.map((row) => row.tenor), undefined, 'DTE'),
   yAxis: valueAxis(percentAxis, 'IV (%)'),
   tooltip: linePointTooltip((value) => formatVol(value / 100)),
@@ -187,22 +244,34 @@ export const termStructureOption = (rows: AtmTerm[]): Options => ({
 
 export const ivSmileOption = (rows: IvSmilePoint[], expiry: string, atmStrike: number | null | undefined): Options => {
   const labels = strikeLabels(rows);
-  const putWing = rows.map((row) => pointWithLabel(formatStrike(row.strike), atmStrike == null || row.strike <= atmStrike ? pct(row.putIv) : null, { strike: row.strike }));
-  const callWing = rows.map((row) => pointWithLabel(formatStrike(row.strike), atmStrike == null || row.strike >= atmStrike ? pct(row.callIv) : null, { strike: row.strike }));
+  const atmIndex = nearestStrikeIndex(rows, atmStrike);
+  const smile = rows.map((row, index) => pointWithLabel(formatStrike(row.strike), pct(atmSmileIv(row, atmStrike, index === atmIndex)), { strike: row.strike }));
   return {
-    ...base(`OTM IV Smile | ${formatExpiry(expiry)}`, 'iv-smile-chart'),
+    ...base(`ATM IV Smile | ${formatExpiry(expiry)}`, 'iv-smile-chart'),
+    legend: { enabled: false },
     xAxis: categoryAxis(labels, atmPlotLine(rows, atmStrike), 'Strike'),
     yAxis: valueAxis(percentAxis, 'IV (%)'),
     tooltip: linePointTooltip((value) => formatVol(value / 100)),
     series: asSeries([
-      { type: 'spline', name: 'Put Wing IV', data: putWing, threshold: null, connectNulls: false, className: 'series-put', colorIndex: 1 },
-      { type: 'spline', name: 'Call Wing IV', data: callWing, threshold: null, connectNulls: false, className: 'series-call', colorIndex: 2 },
+      { type: 'spline', name: 'ATM Smile IV', data: smile, threshold: null, connectNulls: false, className: 'series-atm-smile', colorIndex: 0 },
     ]),
   };
 };
 
+const atmSmileIv = (row: IvSmilePoint, atmStrike: number | null | undefined, isNearestAtm: boolean) => {
+  if (isNearestAtm || atmStrike == null || row.strike === atmStrike) return averageAvailable(row.callIv, row.putIv);
+  if (row.strike < atmStrike) return row.putIv ?? row.callIv;
+  return row.callIv ?? row.putIv;
+};
+
+const averageAvailable = (left: number | null | undefined, right: number | null | undefined) => {
+  if (left != null && right != null) return (left + right) / 2;
+  return left ?? right ?? null;
+};
+
 export const gexByStrikeOption = (rows: GexPoint[], atmStrike: number | null | undefined): Options => ({
   ...base('GEX by Strike | All Expiries', 'gex-chart'),
+  ...strikeNavigator(rows.map((row) => row.netGex)),
   legend: { enabled: false },
   xAxis: categoryAxis(strikeLabels(rows), atmPlotLine(rows, atmStrike), 'Strike'),
   yAxis: valueAxis(compactAxis, 'Net GEX', [{ width: 1, value: 0, zIndex: 4, className: 'zero-plot-line' }]),
@@ -227,6 +296,7 @@ export const gexByExpiryOption = (rows: GexExpiryPoint[], atmStrike: number | nu
   const strikeRows = strikes.map((strike) => ({ strike }));
   const option: Options = {
     ...base('GEX by Expiry | Strike Distribution', 'gex-expiry-chart'),
+    legend: expiryLegend,
     xAxis: categoryAxis(strikeRows.map((row) => formatStrike(row.strike)), atmPlotLine(strikeRows, atmStrike), 'Strike'),
     yAxis: valueAxis(compactAxis, 'Net GEX', [{ width: 1, value: 0, zIndex: 4, className: 'zero-plot-line' }]),
     tooltip: sharedSeriesTooltip('gex', 'expiry GEX', 'Net total'),
@@ -235,13 +305,13 @@ export const gexByExpiryOption = (rows: GexExpiryPoint[], atmStrike: number | nu
       column: { stacking: 'normal', borderRadius: 0, pointPadding: 0.1, groupPadding: 0.05, borderWidth: 0 },
     },
     series: asSeries(
-      expiries.map((expiry) => {
+      expiries.map((expiry, expiryIndex) => {
         const byStrike = new Map(rows.filter((row) => row.expiry === expiry).map((row) => [row.strike, row.netGex]));
         return {
           type: 'column',
           name: formatExpiry(expiry),
           data: strikes.map((strike) => pointWithLabel(formatStrike(strike), byStrike.get(strike) ?? null, { strike, expiry })),
-          colorIndex: expiryColorIndex(expiry),
+          colorIndex: expiryIndex % 12,
         } as any;
       })
     ),
@@ -257,6 +327,7 @@ export const oiByStrikeOption = (rows: OiStrikePoint[], side: 'total' | 'call' |
   const valueForSide = (row: OiStrikePoint) => side === 'call' ? row.callOi : side === 'put' ? row.putOi : row.totalOi;
   const option: Options = {
     ...base(`OI by Strike | ${valueLabel} (contracts)`, 'oi-strike-chart'),
+    legend: expiryLegend,
     xAxis: categoryAxis(strikeRows.map((row) => formatStrike(row.strike)), atmPlotLine(strikeRows, atmStrike), 'Strike'),
     yAxis: valueAxis(compactAxis, 'Contracts'),
     tooltip: sharedSeriesTooltip('contracts', `${valueLabel} by expiry`, 'Total OI'),
@@ -265,13 +336,13 @@ export const oiByStrikeOption = (rows: OiStrikePoint[], side: 'total' | 'call' |
       column: { stacking: 'normal', borderRadius: 0, pointPadding: 0.1, groupPadding: 0.05, borderWidth: 0 },
     },
     series: asSeries(
-      expiries.map((expiry) => {
+      expiries.map((expiry, expiryIndex) => {
         const byStrike = new Map(rows.filter((row) => row.expiry === expiry).map((row) => [row.strike, valueForSide(row)]));
         return {
           type: 'column',
           name: formatExpiry(expiry),
           data: strikes.map((strike) => pointWithLabel(formatStrike(strike), byStrike.get(strike) ?? null, { strike, expiry })),
-          colorIndex: expiryColorIndex(expiry),
+          colorIndex: expiryIndex % 12,
         } as any;
       })
     ),
@@ -283,7 +354,7 @@ export const oiByExpiryOption = (rows: OiExpiry[], side: 'total' | 'call' | 'put
   ...base('OI by Expiry (contracts)', 'oi-expiry-chart'),
   chart: {
     ...base('', 'oi-expiry-chart').chart,
-    spacingBottom: 58,
+    spacingBottom: 40,
   },
   legend: { enabled: false },
   xAxis: {

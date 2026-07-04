@@ -46,9 +46,14 @@ class GreeksTest(unittest.TestCase):
         )
 
         self.assertEqual(curve["metric"], "delta")
-        self.assertEqual(len(curve["points"]), 61)
+        self.assertEqual(len(curve["points"]), 101)
+        self.assertEqual(curve["points"][0]["shock"], -0.5)
+        self.assertEqual(curve["points"][0]["spotPrice"], 50.0)
+        self.assertEqual(curve["points"][-1]["shock"], 0.5)
+        self.assertEqual(curve["points"][-1]["spotPrice"], 150.0)
         current = [point for point in curve["points"] if point["shock"] == 0.0][0]
         self.assertAlmostEqual(current["value"], 2.5, places=9)
+        self.assertEqual(current["spotPrice"], 100.0)
         self.assertEqual(
             [row["shock"] for row in curve["scenarioTable"]],
             [-0.2, -0.1, 0.0, 0.1, 0.2],
@@ -83,7 +88,9 @@ class GreeksTest(unittest.TestCase):
             "delta",
         )
 
-        self.assertEqual(len(curve["payoffPoints"]), 61)
+        self.assertEqual(len(curve["payoffPoints"]), 101)
+        self.assertEqual(curve["payoffPoints"][0]["spotPrice"], 50.0)
+        self.assertEqual(curve["payoffPoints"][-1]["spotPrice"], 150.0)
         down = [point for point in curve["payoffPoints"] if point["shock"] == -0.1][0]
         current = [point for point in curve["payoffPoints"] if point["shock"] == 0.0][0]
         up = [point for point in curve["payoffPoints"] if point["shock"] == 0.1][0]
@@ -131,7 +138,7 @@ class GreeksTest(unittest.TestCase):
         self.assertEqual(curve["current"], 2.5)
         self.assertEqual(curve["totals"]["delta"], 2.5)
         self.assertEqual(curve["unavailableInstruments"], [])
-        self.assertEqual(len(curve["points"]), 61)
+        self.assertEqual(len(curve["points"]), 101)
 
     def test_portfolio_curve_includes_same_asset_perp_delta_and_payoff(self) -> None:
         instrument = "HYPE-20260731-100-C"
@@ -174,6 +181,7 @@ class GreeksTest(unittest.TestCase):
         self.assertEqual(curve["totals"]["delta"], 5.5)
         current_delta = [point for point in curve["points"] if point["shock"] == 0.0][0]
         self.assertAlmostEqual(current_delta["value"], 5.5, places=9)
+        self.assertEqual(current_delta["spotPrice"], 100.0)
         down = [point for point in curve["payoffPoints"] if point["shock"] == -0.1][0]
         current = [point for point in curve["payoffPoints"] if point["shock"] == 0.0][0]
         up = [point for point in curve["payoffPoints"] if point["shock"] == 0.1][0]
@@ -210,7 +218,7 @@ class GreeksTest(unittest.TestCase):
         )
 
         self.assertEqual(curve["current"], 0.5)
-        self.assertEqual(len(curve["points"]), 61)
+        self.assertEqual(len(curve["points"]), 101)
 
 
 if __name__ == "__main__":

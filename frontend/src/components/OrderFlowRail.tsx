@@ -1,4 +1,4 @@
-import { memo, useEffect, useRef, useState } from 'react';
+import { memo, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { DropdownControl } from './Controls';
 import { formatCompact, formatDateTime, formatStrike } from '../format';
 import type { OrderFlowEvent, OrderFlowFilters, OrderFlowLeg } from '../types';
@@ -42,28 +42,36 @@ export const OrderFlowRail = memo(function OrderFlowRail({
     previousEventIdsRef.current = currentIds;
     if (incomingIds.length === 0) return;
     setFreshEventIds(new Set(incomingIds));
-    const timer = window.setTimeout(() => setFreshEventIds(new Set()), 1250);
+    const timer = window.setTimeout(() => setFreshEventIds(new Set()), 420);
     return () => window.clearTimeout(timer);
   }, [events]);
 
-  const markCopied = (eventId: string) => {
+  const markCopied = useCallback((eventId: string) => {
     setCopiedEventId(eventId);
     if (copiedTimerRef.current != null) window.clearTimeout(copiedTimerRef.current);
     copiedTimerRef.current = window.setTimeout(() => setCopiedEventId((current) => current === eventId ? null : current), 1400);
-  };
+  }, []);
 
-  const update = (key: keyof OrderFlowFilters, value: string) => {
+  const update = useCallback((key: keyof OrderFlowFilters, value: string) => {
     onFiltersChange({ ...filters, [key]: value });
-  };
+  }, [filters, onFiltersChange]);
+  const toggleExpanded = useCallback((eventId: string) => {
+    setExpanded((current) => ({ ...current, [eventId]: !(current[eventId] ?? false) }));
+  }, []);
+  const copyAddress = useCallback(async (eventId: string, address: string | null) => {
+    if (!address) return;
+    const copied = await copyTextToClipboard(address);
+    if (copied) markCopied(eventId);
+  }, [markCopied]);
   const walletAddress = filters.wallet.trim();
-  const activeAdvancedFilters = [
+  const activeAdvancedFilters = useMemo(() => [
     filters.orderType,
     filters.timeInForce,
     filters.minAmount,
     filters.minPremiumUsd,
     filters.wallet,
     filters.subaccountId,
-  ].filter(Boolean).length;
+  ].filter(Boolean).length, [filters]);
 
   return (
     <aside className="order-flow-rail" aria-label="Order flow">
@@ -107,56 +115,17 @@ export const OrderFlowRail = memo(function OrderFlowRail({
             {loading ? 'Loading order flow' : 'Waiting for order flow events'}
           </div>
         )}
-        {events.map((event) => {
-          const open = expanded[event.id] ?? false;
-          const priority = eventPriority(event);
-          return (
-            <article className={['order-flow-card', priority, open ? 'open' : '', freshEventIds.has(event.id) ? 'fresh' : ''].filter(Boolean).join(' ')} key={event.id}>
-              <button
-                className="order-flow-card-button"
-                type="button"
-                aria-expanded={open}
-                aria-controls={`order-flow-legs-${event.id}`}
-                onClick={() => setExpanded((current) => ({ ...current, [event.id]: !open }))}
-              >
-                <div className="order-flow-badges">
-                  {priority === 'large' && <Badge value="Large" tone="large" />}
-                  <Badge value={event.executionType === 'ORDERBOOK_ORDER' ? 'ORDERBOOK' : 'RFQ'} tone={event.executionType === 'RFQ' ? 'rfq' : 'neutral'} />
-                  <Badge value={event.optionMix} tone={event.optionMix.toLowerCase()} />
-                </div>
-                <div className="order-flow-title-row">
-                  <div className="order-flow-title">{eventTitle(event)}</div>
-                  <span>{formatPremium(event.premiumUsd)}</span>
-                </div>
-                <div className="order-flow-meta">
-                  <span>Size {formatCompact(event.amount, 1)}</span>
-                  <span>{event.side}</span>
-                </div>
-                <div className="order-flow-meta">
-                  <span>{formatDateTime(event.tradeTsMs ?? event.observedAtMs)}</span>
-                  <span>{event.orderType ? `${event.orderType}${event.timeInForce ? ` / ${event.timeInForce}` : ''}` : event.side}</span>
-                </div>
-              </button>
-              <div className="order-flow-meta order-flow-address-row">
-                <AddressCopy
-                  address={event.wallet}
-                  copied={copiedEventId === event.id}
-                  onCopy={async () => {
-                    if (!event.wallet) return;
-                    const copied = await copyTextToClipboard(event.wallet);
-                    if (copied) markCopied(event.id);
-                  }}
-                />
-                <span>{event.subaccountId ? `Sub ${event.subaccountId}` : 'Sub n/a'}</span>
-              </div>
-              {open && (
-                <div className="order-flow-legs" id={`order-flow-legs-${event.id}`}>
-                  {event.legs.map((leg) => <OrderFlowLegRow leg={leg} key={`${event.id}-${leg.legIndex}`} />)}
-                </div>
-              )}
-            </article>
-          );
-        })}
+        {events.map((event) => (
+          <OrderFlowCard
+            copied={copiedEventId === event.id}
+            event={event}
+            fresh={freshEventIds.has(event.id)}
+            key={event.id}
+            onCopyAddress={copyAddress}
+            onToggle={toggleExpanded}
+            open={expanded[event.id] ?? false}
+          />
+        ))}
       </div>
     </aside>
   );
@@ -195,6 +164,66 @@ function formatPremium(value: number | null) {
   return value == null ? '$-' : `$${formatCompact(value, 1)}`;
 }
 
+const OrderFlowCard = memo(function OrderFlowCard({
+  copied,
+  event,
+  fresh,
+  onCopyAddress,
+  onToggle,
+  open,
+}: {
+  copied: boolean;
+  event: OrderFlowEvent;
+  fresh: boolean;
+  onCopyAddress: (eventId: string, address: string | null) => void;
+  onToggle: (eventId: string) => void;
+  open: boolean;
+}) {
+  const priority = eventPriority(event);
+  return (
+    <article className={['order-flow-card', priority, open ? 'open' : '', fresh ? 'fresh' : ''].filter(Boolean).join(' ')}>
+      <button
+        className="order-flow-card-button"
+        type="button"
+        aria-expanded={open}
+        aria-controls={`order-flow-legs-${event.id}`}
+        onClick={() => onToggle(event.id)}
+      >
+        <div className="order-flow-badges">
+          {priority === 'large' && <Badge value="Large" tone="large" />}
+          <Badge value={event.executionType === 'ORDERBOOK_ORDER' ? 'ORDERBOOK' : 'RFQ'} tone={event.executionType === 'RFQ' ? 'rfq' : 'neutral'} />
+          <Badge value={event.optionMix} tone={event.optionMix.toLowerCase()} />
+        </div>
+        <div className="order-flow-title-row">
+          <div className="order-flow-title">{eventTitle(event)}</div>
+          <span>{formatPremium(event.premiumUsd)}</span>
+        </div>
+        <div className="order-flow-meta">
+          <span>Size {formatCompact(event.amount, 1)}</span>
+          <span>{event.side}</span>
+        </div>
+        <div className="order-flow-meta">
+          <span>{formatDateTime(event.tradeTsMs ?? event.observedAtMs)}</span>
+          <span>{event.orderType ? `${event.orderType}${event.timeInForce ? ` / ${event.timeInForce}` : ''}` : event.side}</span>
+        </div>
+      </button>
+      <div className="order-flow-meta order-flow-address-row">
+        <AddressCopy
+          address={event.wallet}
+          copied={copied}
+          onCopy={() => onCopyAddress(event.id, event.wallet)}
+        />
+        <span>{event.subaccountId ? `Sub ${event.subaccountId}` : 'Sub n/a'}</span>
+      </div>
+      {open && (
+        <div className="order-flow-legs" id={`order-flow-legs-${event.id}`}>
+          {event.legs.map((leg) => <OrderFlowLegRow leg={leg} key={`${event.id}-${leg.legIndex}`} />)}
+        </div>
+      )}
+    </article>
+  );
+});
+
 function RailInput({ label, value, onChange }: { label: string; value: string; onChange: (value: string) => void }) {
   return (
     <label className="rail-control">
@@ -229,7 +258,7 @@ function AddressCopy({
   );
 }
 
-function OrderFlowLegRow({ leg }: { leg: OrderFlowLeg }) {
+const OrderFlowLegRow = memo(function OrderFlowLegRow({ leg }: { leg: OrderFlowLeg }) {
   return (
     <div className="order-flow-leg">
       <span className={`leg-side ${leg.side}`}>{leg.side}</span>
@@ -239,7 +268,7 @@ function OrderFlowLegRow({ leg }: { leg: OrderFlowLeg }) {
       <span>${formatCompact(leg.premiumUsd, 1)}</span>
     </div>
   );
-}
+});
 
 function eventTitle(event: OrderFlowEvent) {
   if (event.legs.length === 1) {

@@ -22,9 +22,11 @@ export function SideNav({
           key={item.route}
           type="button"
           className={route === item.route ? 'side-nav-item active' : 'side-nav-item'}
+          data-route={item.route}
           onClick={() => onRouteChange(item.route)}
           aria-current={route === item.route ? 'page' : undefined}
         >
+          <span className="side-nav-glyph" aria-hidden="true" />
           <span>{item.label}</span>
         </button>
       ))}

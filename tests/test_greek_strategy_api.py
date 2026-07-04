@@ -73,7 +73,7 @@ class GreekStrategyApiTest(unittest.TestCase):
 
         self.assertEqual(result["summary"]["totalDelta"], 2.0)
         self.assertEqual(result["summary"]["positionCount"], 1)
-        self.assertEqual(len(result["curve"]["points"]), 61)
+        self.assertEqual(len(result["curve"]["points"]), 101)
         self.assertEqual(
             [row["shock"] for row in result["curve"]["scenarioRows"]],
             [-0.2, -0.1, 0.0, 0.1, 0.2],
@@ -111,8 +111,8 @@ class GreekStrategyApiTest(unittest.TestCase):
 
         self.assertEqual(set(result["curves"]), {"delta", "gamma", "vega", "theta"})
         self.assertEqual(result["curves"]["vega"]["metric"], "vega")
-        self.assertEqual(len(result["curves"]["vega"]["points"]), 61)
-        self.assertEqual(len(result["payoffCurve"]["points"]), 61)
+        self.assertEqual(len(result["curves"]["vega"]["points"]), 101)
+        self.assertEqual(len(result["payoffCurve"]["points"]), 101)
 
     def test_portfolio_endpoint_ignores_non_option_positions(self) -> None:
         instrument = "HYPE-20260731-100-C"
@@ -205,7 +205,7 @@ class GreekStrategyApiTest(unittest.TestCase):
         )
 
         self.assertEqual(result["summary"]["totalDelta"], 2.0)
-        self.assertEqual(len(result["curve"]["points"]), 61)
+        self.assertEqual(len(result["curve"]["points"]), 101)
         self.assertEqual(FakeDeriveClient.requests, [("BTC", "20260731")])
 
     def test_options_endpoint_serializes_current_ticker_map(self) -> None:
@@ -390,7 +390,7 @@ class GreekStrategyApiTest(unittest.TestCase):
         self.assertEqual(len(result["legs"]), 2)
         self.assertIsNotNone(result["curve"])
         self.assertIsNotNone(result["payoffCurve"])
-        self.assertEqual(len(result["payoffCurve"]["points"]), 61)
+        self.assertEqual(len(result["payoffCurve"]["points"]), 101)
         current = [point for point in result["payoffCurve"]["points"] if point["shock"] == 0.0][0]
         self.assertEqual(current["value"], 14.0)
 

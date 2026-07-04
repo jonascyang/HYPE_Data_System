@@ -1,11 +1,27 @@
 from __future__ import annotations
 
 import copy
+import hashlib
+import json
 from dataclasses import dataclass
 from typing import Any
 
 
 MS_PER_DAY = 86_400_000
+DEFAULT_VOL_TENORS = ("1W", "1M", "3M", "6M")
+VERSIONED_PANELS = (
+    "snapshot",
+    "summary",
+    "expiries",
+    "atmTerm",
+    "skewFly",
+    "oiByExpiry",
+    "ivSmile",
+    "gexByStrike",
+    "gexByExpiry",
+    "oiByStrike",
+    "volRegime",
+)
 
 
 @dataclass(frozen=True)
@@ -26,6 +42,7 @@ class RuntimeDashboardSnapshot:
     ) -> dict[str, Any]:
         payload = copy.deepcopy(self.bootstrap)
         expiry = selected_expiry or payload.get("selectedExpiry")
+        effective_lookback_days = lookback_days or self.lookback_days
         if expiry:
             payload["selectedExpiry"] = expiry
             payload["ivSmile"] = self.iv_smile_by_expiry.get(expiry, [])
@@ -41,6 +58,12 @@ class RuntimeDashboardSnapshot:
             payload["summary"]["ivRank"] = vol_regime.get("ivRank")
             payload["summary"]["ivPercentile"] = vol_regime.get("ivPercentile")
             payload["summary"]["volRegimeLookbackDays"] = vol_regime.get("lookbackDays")
+        payload["volRegimeByTenor"] = self.vol_regime_by_tenor(lookback_days=effective_lookback_days)
+        payload["snapshotVersion"] = str(self.snapshot_id)
+        payload["panelVersions"] = self.panel_versions(
+            selected_expiry=expiry,
+            lookback_days=effective_lookback_days,
+        )
         return payload
 
     def panel_payload(self, panel: str, params: dict[str, Any] | None = None) -> Any:
@@ -68,6 +91,46 @@ class RuntimeDashboardSnapshot:
             )
         raise ValueError(f"Unsupported panel: {panel}")
 
+    def vol_regime_by_tenor(self, *, lookback_days: int | None = None) -> dict[str, dict[str, Any]]:
+        return {
+            tenor: vol_regime_from_terms(
+                current_terms=self.current_atm_terms,
+                history_rows=self.vol_regime_history,
+                tenor=tenor,
+                lookback_days=lookback_days or self.lookback_days,
+                latest_ts_ms=self.snapshot_id,
+            )
+            for tenor in DEFAULT_VOL_TENORS
+        }
+
+    def panel_versions(
+        self,
+        *,
+        selected_expiry: str | None = None,
+        lookback_days: int | None = None,
+    ) -> dict[str, str]:
+        versions: dict[str, str] = {}
+        for panel in VERSIONED_PANELS:
+            params: dict[str, Any] = {}
+            if panel == "ivSmile":
+                params["expiry"] = selected_expiry or self.bootstrap.get("selectedExpiry")
+            elif panel == "volRegime":
+                params["tenor"] = str(self.bootstrap.get("summary", {}).get("volRegimeTenor") or "1M")
+                params["lookbackDays"] = lookback_days or self.lookback_days
+            try:
+                versions[panel] = payload_revision(self.panel_payload(panel, params))
+            except ValueError:
+                continue
+        return versions
+
+    def state_payload(self) -> dict[str, Any]:
+        return {
+            "snapshot": copy.deepcopy(self.bootstrap.get("snapshot", {})),
+            "snapshotVersion": str(self.snapshot_id),
+            "panelVersions": self.panel_versions(),
+            "availablePanels": list(VERSIONED_PANELS),
+        }
+
 
 def dashboard_panel_payloads(
     snapshot: RuntimeDashboardSnapshot,
@@ -80,6 +143,16 @@ def dashboard_panel_payloads(
         except ValueError:
             continue
     return payload
+
+
+def payload_revision(value: Any) -> str:
+    encoded = json.dumps(
+        value,
+        sort_keys=True,
+        separators=(",", ":"),
+        default=str,
+    ).encode("utf-8")
+    return hashlib.blake2s(encoded, digest_size=8).hexdigest()
 
 
 def vol_regime_from_terms(

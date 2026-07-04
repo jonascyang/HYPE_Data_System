@@ -20,6 +20,7 @@ export function PortfolioGreekStrip({
   ];
   return (
     <section className="kpi-strip greek-kpi-strip" aria-busy={loading ? 'true' : undefined}>
+      <span className="kpi-strip-caption">Portfolio Risk Output</span>
       {items.map(([label, rawValue, format = 'number']) => (
         <div className="kpi" data-tone={toneForGreek(rawValue)} key={label}>
           <div className="kpi-label">{label}</div>

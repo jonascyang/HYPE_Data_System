@@ -37,6 +37,8 @@ const metricLabel = (metric: GreekMetric) => {
   return 'Theta';
 };
 
+const PRICE_TICK_INTERVAL = 5;
+
 const shockPercent = (point: GreekCurvePoint) => {
   const raw = point.shockPct ?? point.shock;
   return Math.abs(raw) <= 1 ? raw * 100 : raw;
@@ -48,6 +50,28 @@ const shockLabel = (point: GreekCurvePoint) => {
   return `${pct > 0 ? '+' : ''}${formatNumber(pct, 0)}%`;
 };
 
+const priceLabel = (value: number | null | undefined) => {
+  if (value == null || !Number.isFinite(value)) return '-';
+  return formatNumber(value, Math.abs(value) >= 10 ? 0 : 2);
+};
+
+const curveXValue = (point: GreekCurvePoint, index: number) => (
+  typeof point.spotPrice === 'number' && Number.isFinite(point.spotPrice)
+    ? point.spotPrice
+    : index
+);
+
+const priceAxisBounds = (rows: GreekCurvePoint[]): { min?: number; max?: number } => {
+  const prices = rows
+    .map((row) => row.spotPrice)
+    .filter((value): value is number => typeof value === 'number' && Number.isFinite(value));
+  if (!prices.length) return {};
+  return {
+    min: Math.floor(Math.min(...prices) / PRICE_TICK_INTERVAL) * PRICE_TICK_INTERVAL,
+    max: Math.ceil(Math.max(...prices) / PRICE_TICK_INTERVAL) * PRICE_TICK_INTERVAL,
+  };
+};
+
 const formatUsdCompact = (value: number | null | undefined, digits = 4) => {
   if (value == null) return '-';
   const formatted = formatCompact(Math.abs(value), digits);
@@ -56,9 +80,10 @@ const formatUsdCompact = (value: number | null | undefined, digits = 4) => {
   return '$0';
 };
 
-const curvePointWithLabel = (row: GreekCurvePoint, y: number | null | undefined) => ({
+const curvePointWithLabel = (row: GreekCurvePoint, y: number | null | undefined, index: number) => ({
+  x: curveXValue(row, index),
   y: y ?? null,
-  custom: { xLabel: shockLabel(row), spotPrice: row.spotPrice ?? null },
+  custom: { xLabel: priceLabel(row.spotPrice), spotPrice: row.spotPrice ?? null, shockLabel: shockLabel(row) },
 }) as any;
 
 export const greekValue = (point: GreekCurvePoint | null | undefined, metric: GreekMetric): NullableNumber => {
@@ -74,7 +99,7 @@ const currentPlotLine = (rows: GreekCurvePoint[]): any[] | undefined => {
   const index = rows.findIndex((row) => Math.abs(shockPercent(row)) < 0.0001);
   if (index < 0) return undefined;
   return [{
-    value: index,
+    value: curveXValue(rows[index], index),
     width: 1,
     zIndex: 5,
     dashStyle: 'Dash',
@@ -92,6 +117,7 @@ const currentPlotLine = (rows: GreekCurvePoint[]): any[] | undefined => {
 
 export const greekCurveOption = (rows: GreekCurvePoint[], metric: GreekMetric): Options => {
   const label = metricLabel(metric);
+  const priceBounds = priceAxisBounds(rows);
   return {
     chart: {
       backgroundColor: 'transparent',
@@ -108,12 +134,24 @@ export const greekCurveOption = (rows: GreekCurvePoint[], metric: GreekMetric): 
     exporting: { enabled: false },
     legend: { enabled: false },
     xAxis: {
-      categories: rows.map(shockLabel),
+      type: 'linear',
+      min: priceBounds.min,
+      max: priceBounds.max,
+      tickInterval: PRICE_TICK_INTERVAL,
+      startOnTick: true,
+      endOnTick: true,
+      allowDecimals: false,
       title: { text: '' },
       crosshair: { className: 'highcharts-crosshair-x', snap: true },
       tickLength: 0,
       lineWidth: 1,
-      labels: { style: axisLabelStyle },
+      labels: {
+        style: axisLabelStyle,
+        formatter: function () {
+          const value = typeof this.value === 'number' ? this.value : Number(this.value);
+          return Number.isFinite(value) ? priceLabel(value) : String(this.value);
+        },
+      },
       plotLines: currentPlotLine(rows),
     },
     yAxis: {
@@ -134,11 +172,13 @@ export const greekCurveOption = (rows: GreekCurvePoint[], metric: GreekMetric): 
     tooltip: tooltip(function () {
       const value = typeof this.y === 'number' ? formatCompact(this.y, 4) : '-';
       const spotPrice = this.point?.custom?.spotPrice;
-      const spot = spotPrice == null ? null : `Spot ${formatNumber(spotPrice, 2)}`;
+      const spot = spotPrice == null ? null : `Price ${priceLabel(spotPrice)}`;
+      const move = this.point?.custom?.shockLabel ? `Move ${this.point.custom.shockLabel}` : null;
       return [
         header(tooltipLabel(this)),
         pointLine(String(this.point?.colorIndex ?? '0'), `${label}: ${value}`),
         spot ? escapeSvgText(spot) : null,
+        move ? escapeSvgText(move) : null,
       ].filter(Boolean).join(br);
     }),
     plotOptions: {
@@ -152,7 +192,7 @@ export const greekCurveOption = (rows: GreekCurvePoint[], metric: GreekMetric): 
       {
         type: 'line',
         name: label,
-        data: rows.map((row) => curvePointWithLabel(row, greekValue(row, metric))),
+        data: rows.map((row, index) => curvePointWithLabel(row, greekValue(row, metric), index)),
         threshold: null,
         colorIndex: 0,
       },
@@ -160,69 +200,86 @@ export const greekCurveOption = (rows: GreekCurvePoint[], metric: GreekMetric): 
   };
 };
 
-export const payoffCurveOption = (rows: GreekCurvePoint[]): Options => ({
-  chart: {
-    backgroundColor: 'transparent',
-    className: 'hype-chart greek-curve-chart payoff-curve-chart',
-    styledMode: true,
-    animation: false,
-    spacingTop: 13,
-    spacingRight: 24,
-    spacingBottom: 38,
-    spacingLeft: 8,
-  },
-  title: { text: 'Payoff', align: 'left', x: 8, y: 15 },
-  credits: { enabled: false },
-  exporting: { enabled: false },
-  legend: { enabled: false },
-  xAxis: {
-    categories: rows.map(shockLabel),
-    title: { text: '' },
-    crosshair: { className: 'highcharts-crosshair-x', snap: true },
-    tickLength: 0,
-    lineWidth: 1,
-    labels: { style: axisLabelStyle },
-    plotLines: currentPlotLine(rows),
-  },
-  yAxis: {
-    opposite: true,
-    title: { text: '' },
-    tickLength: 0,
-    lineWidth: 0,
-    gridLineWidth: 1,
-    plotLines: [{ width: 1, value: 0, zIndex: 4, className: 'zero-plot-line' }],
-    labels: {
-      style: axisLabelStyle,
-      formatter: function () {
-        const value = typeof this.value === 'number' ? this.value : Number(this.value);
-        return Number.isFinite(value) ? formatUsdCompact(value, 2) : String(this.value);
+export const payoffCurveOption = (rows: GreekCurvePoint[]): Options => {
+  const priceBounds = priceAxisBounds(rows);
+  return {
+    chart: {
+      backgroundColor: 'transparent',
+      className: 'hype-chart greek-curve-chart payoff-curve-chart',
+      styledMode: true,
+      animation: false,
+      spacingTop: 13,
+      spacingRight: 24,
+      spacingBottom: 38,
+      spacingLeft: 8,
+    },
+    title: { text: 'Payoff', align: 'left', x: 8, y: 15 },
+    credits: { enabled: false },
+    exporting: { enabled: false },
+    legend: { enabled: false },
+    xAxis: {
+      type: 'linear',
+      min: priceBounds.min,
+      max: priceBounds.max,
+      tickInterval: PRICE_TICK_INTERVAL,
+      startOnTick: true,
+      endOnTick: true,
+      allowDecimals: false,
+      title: { text: '' },
+      crosshair: { className: 'highcharts-crosshair-x', snap: true },
+      tickLength: 0,
+      lineWidth: 1,
+      labels: {
+        style: axisLabelStyle,
+        formatter: function () {
+          const value = typeof this.value === 'number' ? this.value : Number(this.value);
+          return Number.isFinite(value) ? priceLabel(value) : String(this.value);
+        },
+      },
+      plotLines: currentPlotLine(rows),
+    },
+    yAxis: {
+      opposite: true,
+      title: { text: '' },
+      tickLength: 0,
+      lineWidth: 0,
+      gridLineWidth: 1,
+      plotLines: [{ width: 1, value: 0, zIndex: 4, className: 'zero-plot-line' }],
+      labels: {
+        style: axisLabelStyle,
+        formatter: function () {
+          const value = typeof this.value === 'number' ? this.value : Number(this.value);
+          return Number.isFinite(value) ? formatUsdCompact(value, 2) : String(this.value);
+        },
       },
     },
-  },
-  tooltip: tooltip(function () {
-    const value = typeof this.y === 'number' ? formatUsdCompact(this.y, 4) : '-';
-    const spotPrice = this.point?.custom?.spotPrice;
-    const spot = spotPrice == null ? null : `Spot ${formatNumber(spotPrice, 2)}`;
-    return [
-      header(tooltipLabel(this)),
-      pointLine(String(this.point?.colorIndex ?? '0'), `Payoff: ${value}`),
-      spot ? escapeSvgText(spot) : null,
-    ].filter(Boolean).join(br);
-  }),
-  plotOptions: {
-    series: {
-      animation: { duration: 0 },
-      states: { hover: { enabled: true, lineWidthPlus: 0, halo: { size: 3, opacity: 0.18 } } },
+    tooltip: tooltip(function () {
+      const value = typeof this.y === 'number' ? formatUsdCompact(this.y, 4) : '-';
+      const spotPrice = this.point?.custom?.spotPrice;
+      const spot = spotPrice == null ? null : `Price ${priceLabel(spotPrice)}`;
+      const move = this.point?.custom?.shockLabel ? `Move ${this.point.custom.shockLabel}` : null;
+      return [
+        header(tooltipLabel(this)),
+        pointLine(String(this.point?.colorIndex ?? '0'), `Payoff: ${value}`),
+        spot ? escapeSvgText(spot) : null,
+        move ? escapeSvgText(move) : null,
+      ].filter(Boolean).join(br);
+    }),
+    plotOptions: {
+      series: {
+        animation: { duration: 0 },
+        states: { hover: { enabled: true, lineWidthPlus: 0, halo: { size: 3, opacity: 0.18 } } },
+      },
+      line: { marker: { symbol: 'circle', radius: 1.8, states: { hover: { radius: 3 } } }, lineWidth: 1.8 },
     },
-    line: { marker: { symbol: 'circle', radius: 1.8, states: { hover: { radius: 3 } } }, lineWidth: 1.8 },
-  },
-  series: asSeries([
-    {
-      type: 'line',
-      name: 'Payoff',
-      data: rows.map((row) => curvePointWithLabel(row, row.value)),
-      threshold: 0,
-      colorIndex: 1,
-    },
-  ]),
-});
+    series: asSeries([
+      {
+        type: 'line',
+        name: 'Payoff',
+        data: rows.map((row, index) => curvePointWithLabel(row, row.value, index)),
+        threshold: 0,
+        colorIndex: 1,
+      },
+    ]),
+  };
+};

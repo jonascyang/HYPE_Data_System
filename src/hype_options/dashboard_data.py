@@ -49,7 +49,7 @@ def build_dashboard_payload(conn, *, history_days: int = 90, max_history_points:
         "snapshotLabel": _format_timestamp(latest_ts_ms),
         "latestTsMs": latest_ts_ms,
         "defaultExpiry": default_expiry,
-        "globalMetrics": _serialize_global_metrics(global_metrics, latest_ts_ms),
+        "globalMetrics": _serialize_global_metrics(global_metrics, latest_ts_ms, price_history=price_history),
         "atmIvTable": _atm_iv_table(conn, latest_ts_ms, expiry_metrics, global_metrics),
         "skew25dTable": _skew_25d_table(conn, latest_ts_ms, expiry_metrics),
         "expiryMetrics": [_serialize_expiry_metric(row) for row in expiry_metrics],
@@ -288,11 +288,13 @@ def _price_history(conn, latest_ts_ms: int, *, history_days: int) -> list[dict]:
     )
 
 
-def _serialize_global_metrics(row: dict | None, latest_ts_ms: int) -> dict:
+def _serialize_global_metrics(row: dict | None, latest_ts_ms: int, *, price_history: list[dict] | None = None) -> dict:
     row = row or {"ts_ms": latest_ts_ms}
+    spot_price = _nullable_num(row.get("spot_price"))
     return {
         "tsMs": latest_ts_ms,
-        "spotPrice": _nullable_num(row.get("spot_price")),
+        "spotPrice": spot_price,
+        "spotChange24hPct": _spot_change_24h_pct(price_history or [], spot_price, latest_ts_ms),
         "rv1d": _nullable_num(row.get("rv_1d")),
         "rv7d": _nullable_num(row.get("rv_7d")),
         "rv14d": _nullable_num(row.get("rv_14d")),
@@ -311,6 +313,25 @@ def _serialize_global_metrics(row: dict | None, latest_ts_ms: int) -> dict:
         "netGex": _num(row.get("net_gex")),
         "absGex": _num(row.get("abs_gex")),
     }
+
+
+def _spot_change_24h_pct(price_history: list[dict], current_price: float | None, latest_ts_ms: int) -> float | None:
+    if current_price is None or not math.isfinite(current_price):
+        return None
+    target_ts_ms = latest_ts_ms - MS_PER_DAY
+    candidates = [
+        row for row in price_history
+        if row.get("ts_ms") is not None
+        and row.get("price") is not None
+        and abs(int(row["ts_ms"]) - target_ts_ms) <= CHANGE_LOOKUP_TOLERANCE_MS
+    ]
+    if not candidates:
+        return None
+    past_row = min(candidates, key=lambda row: (abs(int(row["ts_ms"]) - target_ts_ms), -int(row["ts_ms"])))
+    past_price = _nullable_num(past_row.get("price"))
+    if past_price is None or past_price <= 0:
+        return None
+    return round((current_price - past_price) / past_price * 100, 2)
 
 
 def _serialize_expiry_metric(row: dict) -> dict:

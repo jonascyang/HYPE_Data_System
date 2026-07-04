@@ -6,6 +6,7 @@ from hype_options.dashboard_read_model import (
     RuntimeDashboardSnapshot,
     dashboard_panel_payloads,
     empty_vol_regime,
+    payload_revision,
     vol_regime_from_terms,
 )
 
@@ -28,6 +29,10 @@ class DashboardReadModelTest(unittest.TestCase):
         self.assertEqual(payload["volRegime"]["sampleCount"], 2)
         self.assertEqual(payload["summary"]["ivRank"], 100.0)
         self.assertEqual(payload["summary"]["ivPercentile"], 100.0)
+        self.assertEqual(payload["snapshotVersion"], str(LATEST_TS_MS))
+        self.assertIn("ivSmile", payload["panelVersions"])
+        self.assertIn("volRegimeByTenor", payload)
+        self.assertEqual(payload["volRegimeByTenor"]["1M"]["sampleCount"], 2)
 
     def test_panel_payloads_uses_snapshot_read_model_and_ignores_unknown_panels(self) -> None:
         snapshot = _snapshot()
@@ -46,6 +51,17 @@ class DashboardReadModelTest(unittest.TestCase):
         self.assertEqual(payload["summary"]["spotPrice"], 63.0)
         self.assertEqual(payload["ivSmile"], [{"strike": 65.0, "callIv": 0.9}])
         self.assertEqual(payload["volRegime"]["currentAtmIv"], 0.9)
+
+    def test_state_payload_exposes_current_versions_without_panel_payloads(self) -> None:
+        snapshot = _snapshot()
+
+        payload = snapshot.state_payload()
+
+        self.assertEqual(payload["snapshot"]["latestTsMs"], LATEST_TS_MS)
+        self.assertEqual(payload["snapshotVersion"], str(LATEST_TS_MS))
+        self.assertIn("summary", payload["panelVersions"])
+        self.assertIn("ivSmile", payload["availablePanels"])
+        self.assertEqual(payload["panelVersions"]["summary"], payload_revision(snapshot.panel_payload("summary")))
 
     def test_vol_regime_returns_empty_payload_when_tenor_has_no_values(self) -> None:
         result = vol_regime_from_terms(
