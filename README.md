@@ -11,7 +11,8 @@ The two projects are intentionally separate. Options data is snapshot-based, hig
 
 | Component | Path | Source | Storage | Output |
 | --- | --- | --- | --- | --- |
-| HYPE options data system | `src/hype_options/` | Derive public API | SQLite or Turso/libSQL | Normalized tables, derived metrics, dashboard JSON |
+| HYPE options data system | `src/hype_options/` | Derive public API | SQLite or Turso/libSQL | Normalized tables, derived metrics, realtime dashboard API |
+| HYPE options dashboard | `frontend/` | FastAPI REST and `WS /ws/options` | Browser state and realtime cache | Professional options terminal UI |
 | Validator delegation monitor | `validator_monitor_sanitized/` | Hypurrscan API | Local files | CSV, XLSX, summary JSON |
 
 ## HYPE Options Data System
@@ -34,7 +35,7 @@ Main responsibilities:
 - Keep short-lived raw payloads for traceability and reprocessing.
 - Compute expiry-level metrics such as ATM IV, skew, fly, max pain, OI, volume, and GEX.
 - Compute global metrics such as realized volatility, VRP, aggregate OI, aggregate volume, and aggregate GEX.
-- Export dashboard data from the database.
+- Serve dashboard bootstrap, panel data, Greek/strategy simulations, and realtime WebSocket updates.
 - Apply retention rules to high-volume tables.
 
 ### Options Database Model
@@ -43,6 +44,7 @@ Main responsibilities:
 | --- | --- | --- |
 | Source and normalized data | `derive_instruments`, `derive_ticker_snapshots`, `derive_raw_ticker_payloads`, `hype_price_snapshots` | Store instrument metadata, option snapshots, compressed source payloads, and spot price history. |
 | Derived metrics | `derived_expiry_metrics`, `derived_global_metrics`, `derived_atm_term_metrics`, `derived_gex_by_strike` | Store analytics outputs for expiry views, global market views, ATM term structure, and recent strike-level GEX. |
+| Order flow | `derive_order_flow_events`, `derive_order_flow_legs` | Store recent Derive orderbook and RFQ flow for the dashboard right rail. |
 | Collection state | `collection_runs` | Track collection attempts, row counts, status, endpoint, and source payload hashes. |
 
 Retention is explicit because option snapshots can grow quickly. The current design keeps raw payloads, ticker snapshots, collection run records, and strike-level GEX on configurable retention windows. Expiry-level, global, and ATM term metrics are the main long-lived analytical tables.
@@ -127,6 +129,8 @@ python validator_monitor_sanitized/monitor_validator_delegations.py \
 | `init-db` | Apply `src/hype_options/schema.sql` to the configured SQLite or Turso/libSQL database. |
 | `collect-once` | Run one database-backed options collection cycle. |
 | `collect-loop` | Run repeated options collection on a configured interval. |
+| `collect-order-flow-loop` | Run repeated Derive order-flow collection for the dashboard right rail. |
+| `serve-dashboard` | Start the FastAPI dashboard API and WebSocket service. |
 | `retention` | Delete rows from short-retention tables according to configured windows. |
 | `export-dashboard-data` | Build dashboard JSON from stored database data. |
 
@@ -157,7 +161,12 @@ HYPE_Data_System/
 │       ├── collector.py              # One-cycle collection orchestration
 │       ├── metrics.py                # Options metric calculations
 │       ├── retention.py              # Short-retention table cleanup
-│       └── dashboard_data.py         # Dashboard JSON export
+│       ├── realtime.py               # Realtime snapshot cache and WebSocket broadcasts
+│       ├── api.py                    # FastAPI REST, WebSocket, and Greek/strategy endpoints
+│       └── dashboard_data.py         # Dashboard read-model data assembly
+├── frontend/
+│   ├── src/                          # React/Vite dashboard application
+│   └── package.json                  # Frontend build and dev scripts
 └── validator_monitor_sanitized/
     ├── README.md                     # Validator monitor notes
     └── monitor_validator_delegations.py
@@ -190,7 +199,39 @@ Local output directories are generated at runtime and are not part of the source
 
 ## HYPE Options Dashboard UI
 
-The repository now includes an optional realtime dashboard frontend in `frontend/` and a FastAPI dashboard API in `src/hype_options/api.py`.
+The repository includes a realtime dark terminal-style HYPE options dashboard in `frontend/` and a FastAPI dashboard API in `src/hype_options/api.py`.
+
+The dashboard is designed for professional options monitoring:
+
+- Market dashboard: spot, snapshot time, OI, volume, put/call ratio, net GEX, ATM IV, IV rank/percentile, term structure, IV smile, GEX/OI by strike and expiry, skew/fly tables, and order flow.
+- Position lookup: wallet lookup, selected positions, portfolio Greeks, delta curve, and payoff.
+- Greek simulator: multi-leg option simulation with prefetched Greek curves.
+- Strategy simulator: editable strategy legs, templates, payoff, and Greek curve previews.
+
+Runtime data flow:
+
+```text
+Derive API
+-> FastAPI realtime snapshot cache
+-> REST bootstrap for first render
+-> panel-level WebSocket updates
+-> React/Vite terminal dashboard
+```
+
+Core endpoints:
+
+| Endpoint | Purpose |
+| --- | --- |
+| `GET /api/options/dashboard/bootstrap` | First-load dashboard payload. |
+| `GET /api/options/dashboard/state` | Snapshot version and panel checksum state. |
+| `GET /api/options/iv-smile?expiry=YYYYMMDD` | IV smile for a selected expiry. |
+| `GET /api/options/gex-by-strike` | GEX aggregated across all expiries by strike. |
+| `GET /api/options/gex-by-expiry` | GEX strike distribution split by expiry. |
+| `GET /api/options/oi-by-strike` | OI strike distribution split by expiry. |
+| `GET /api/order-flow/events` | Recent orderbook/RFQ order-flow rows. |
+| `WS /ws/options` | Panel subscriptions and realtime updates. |
+
+The REST API adds `X-Response-Time-Ms` headers. WebSocket updates include panel revisions plus payload timing metadata so interaction speed can be measured without changing user-facing data.
 
 Run the API server:
 
@@ -207,3 +248,48 @@ npm run dev
 ```
 
 The dashboard uses REST for first-load bootstrap and `WS /ws/options` for automatic updates. There is no main refresh workflow; the header reports live/stale/reconnecting state. Expiry and window controls are local to each chart panel.
+
+Build and test before deployment:
+
+```bash
+PYTHONPATH=src pytest -p no:cacheprovider
+
+cd frontend
+npm run build
+```
+
+## Current VPS Deployment
+
+Current production target:
+
+| Item | Value |
+| --- | --- |
+| SSH alias | `<vps-ssh-alias>` |
+| Project path | `<server-project-path>` |
+| Public frontend | `<dashboard-url>/` |
+| Frontend root | `<server-project-path>/frontend/dist` |
+| API bind | `127.0.0.1:8000` behind nginx |
+
+Systemd services:
+
+| Service | Purpose |
+| --- | --- |
+| `hype-options-api.service` | FastAPI dashboard API, WebSocket, and realtime options snapshot cache. |
+| `hype-options-orderflow.service` | Repeated Derive order-flow collection. |
+| `hype-validator-monitor.service` | Validator delegation monitor. |
+
+After deploy, verify the same four things every time:
+
+```bash
+systemctl is-active hype-options-api.service hype-options-orderflow.service hype-validator-monitor.service
+curl -i <dashboard-url>/api/options/dashboard/state
+curl -i '<dashboard-url>/api/order-flow/events?limit=1'
+curl -I <dashboard-url>/
+```
+
+Expected result:
+
+- Services are `active`.
+- Options snapshot `latestTsMs` is recent and keeps moving.
+- Order-flow rows return recent `observedAtMs`.
+- Frontend returns HTTP 200 and loads assets from `frontend/dist`.
