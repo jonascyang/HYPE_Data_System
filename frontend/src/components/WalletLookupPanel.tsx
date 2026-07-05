@@ -16,13 +16,13 @@ export function WalletLookupPanel({
   const [address, setAddress] = useState('');
 
   return (
-    <section className="change-panel wallet-lookup-panel">
+    <section className="change-panel wallet-search-panel">
       <div className="panel-heading-row">
-        <h2>Wallet Lookup</h2>
+        <h2>Wallet Search</h2>
         <span>{sourceLabel(wallet?.source)}</span>
       </div>
       <form
-        className="wallet-lookup-form"
+        className="wallet-search-form"
         onSubmit={(event) => {
           event.preventDefault();
           const trimmed = address.trim();
@@ -37,7 +37,7 @@ export function WalletLookupPanel({
           aria-label="Wallet address"
         />
         <button type="submit" disabled={loading || !address.trim()} aria-busy={loading ? 'true' : undefined}>
-          {loading ? 'Loading' : 'Lookup'}
+          {loading ? 'Loading' : 'Search'}
         </button>
       </form>
       {error && <div className="panel-inline-error" role="alert">{error}</div>}

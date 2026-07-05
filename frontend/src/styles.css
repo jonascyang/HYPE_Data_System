@@ -245,7 +245,7 @@ button { -webkit-tap-highlight-color: transparent; }
 .topbar {
   min-height: 2.5rem;
   display: grid;
-  grid-template-columns: auto 1fr;
+  grid-template-columns: minmax(0, 1fr);
   align-items: stretch;
   gap: 0;
   border: 1px solid var(--line);
@@ -576,12 +576,12 @@ button { -webkit-tap-highlight-color: transparent; }
   background: var(--accent);
   border-color: var(--accent);
 }
-.greek-lookup-grid {
+.greek-search-grid {
   display: grid;
   grid-template-columns: repeat(12, minmax(0, 1fr));
   gap: .375rem;
 }
-.change-panel.wallet-lookup-panel {
+.change-panel.wallet-search-panel {
   grid-column: span 5;
   height: 420px;
 }
@@ -636,13 +636,13 @@ button { -webkit-tap-highlight-color: transparent; }
 .positions-heading-controls .select-control .dropdown-shell {
   min-width: 6.5rem;
 }
-.wallet-lookup-form {
+.wallet-search-form {
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   gap: .35rem;
   margin-bottom: .55rem;
 }
-.wallet-lookup-form input,
+.wallet-search-form input,
 .field-control input {
   width: 100%;
   height: 1.8rem;
@@ -655,16 +655,16 @@ button { -webkit-tap-highlight-color: transparent; }
   font-size: .68rem;
   font-family: var(--font-data);
 }
-.wallet-lookup-form input::placeholder,
+.wallet-search-form input::placeholder,
 .field-control input::placeholder {
   color: var(--faint);
 }
-.wallet-lookup-form input:focus-visible,
+.wallet-search-form input:focus-visible,
 .field-control input:focus-visible {
   border-color: var(--accent);
   box-shadow: 0 0 0 1px rgba(81,221,236,.18);
 }
-.wallet-lookup-form button,
+.wallet-search-form button,
 .primary-action {
   height: 1.8rem;
   border: 1px solid var(--accent);
@@ -678,16 +678,16 @@ button { -webkit-tap-highlight-color: transparent; }
   text-transform: uppercase;
   transition: transform .16s var(--ease-out), box-shadow .16s var(--ease-out), background .16s var(--ease-out), border-color .16s var(--ease-out);
 }
-.wallet-lookup-form button:not(:disabled):hover,
+.wallet-search-form button:not(:disabled):hover,
 .primary-action:not(:disabled):hover {
   transform: translateY(-1px);
   box-shadow: 0 .5rem 1rem rgba(81,221,236,.16);
 }
-.wallet-lookup-form button:not(:disabled):active,
+.wallet-search-form button:not(:disabled):active,
 .primary-action:not(:disabled):active {
   transform: translateY(0);
 }
-.wallet-lookup-form button:disabled,
+.wallet-search-form button:disabled,
 .primary-action:disabled {
   cursor: not-allowed;
   color: var(--faint);
@@ -1758,12 +1758,12 @@ body {
   background: currentColor;
 }
 
-.side-nav-item[data-route='positionLookup'] .side-nav-glyph::before {
+.side-nav-item[data-route='positionSearch'] .side-nav-glyph::before {
   top: .28rem;
   border-radius: 2px;
 }
 
-.side-nav-item[data-route='positionLookup'] .side-nav-glyph::after {
+.side-nav-item[data-route='positionSearch'] .side-nav-glyph::after {
   inset: .04rem .32rem auto;
   height: .42rem;
   border-bottom: 0;
@@ -1806,7 +1806,7 @@ body {
 }
 
 .topbar {
-  grid-template-columns: auto auto minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
 }
 
 .brand {
@@ -2105,7 +2105,7 @@ body {
   font-size: .6rem;
 }
 
-.wallet-lookup-form input,
+.wallet-search-form input,
 .field-control input,
 .rail-control input {
   height: 1.85rem;
@@ -2115,7 +2115,7 @@ body {
   font-size: .68rem;
 }
 
-.wallet-lookup-form button,
+.wallet-search-form button,
 .primary-action {
   height: 1.85rem;
   border-color: rgba(81,221,236,.78);
@@ -2126,7 +2126,7 @@ body {
 }
 
 .primary-action:not(:disabled):hover,
-.wallet-lookup-form button:not(:disabled):hover {
+.wallet-search-form button:not(:disabled):hover {
   box-shadow: 0 0 1rem rgba(81,221,236,.18), inset 0 1px 0 rgba(255,255,255,.32);
 }
 
@@ -2228,11 +2228,11 @@ a {
   color: var(--muted);
 }
 
-.greek-lookup-grid {
+.greek-search-grid {
   gap: 0;
 }
 
-.change-panel.wallet-lookup-panel,
+.change-panel.wallet-search-panel,
 .change-panel.positions-table-panel {
   height: 430px;
 }
@@ -2889,7 +2889,7 @@ a {
     position: static;
     height: min(72dvh, 720px);
   }
-  .change-panel.wallet-lookup-panel, .change-panel.positions-table-panel {
+  .change-panel.wallet-search-panel, .change-panel.positions-table-panel {
     grid-column: 1 / -1;
   }
 }
@@ -2901,14 +2901,14 @@ a {
   }
   .chart-panel, .change-panel { height: 360px; }
   .panel-atm-change, .panel-skew-fly { height: 286px; }
-  .greek-lookup-grid { grid-template-columns: 1fr; }
-  .change-panel.wallet-lookup-panel, .change-panel.positions-table-panel, .greek-kpi-strip, .greek-curve-section {
+  .greek-search-grid { grid-template-columns: 1fr; }
+  .change-panel.wallet-search-panel, .change-panel.positions-table-panel, .greek-kpi-strip, .greek-curve-section {
     grid-column: auto;
   }
   .greek-curve-section {
     grid-template-columns: 1fr;
   }
-  .change-panel.wallet-lookup-panel, .change-panel.positions-table-panel, .change-panel.greek-scenario-panel, .change-panel.strategy-leg-panel {
+  .change-panel.wallet-search-panel, .change-panel.positions-table-panel, .change-panel.greek-scenario-panel, .change-panel.strategy-leg-panel {
     height: 340px;
   }
 }
@@ -3040,7 +3040,7 @@ a {
   .order-flow-leg { grid-template-columns: 2.5rem 1fr 1fr; }
   .order-flow-leg span:nth-child(4),
   .order-flow-leg span:nth-child(5) { display: none; }
-  .wallet-lookup-form {
+  .wallet-search-form {
     grid-template-columns: 1fr;
   }
   .wallet-summary-strip {

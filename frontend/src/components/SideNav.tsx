@@ -1,8 +1,8 @@
-export type AppRoute = 'market' | 'positionLookup' | 'greekSimulator' | 'strategySimulator';
+export type AppRoute = 'market' | 'positionSearch' | 'greekSimulator' | 'strategySimulator';
 
 const NAV_ITEMS: Array<{ route: AppRoute; label: string }> = [
   { route: 'market', label: 'Market Dashboard' },
-  { route: 'positionLookup', label: 'Position Lookup' },
+  { route: 'positionSearch', label: 'Position Search' },
   { route: 'greekSimulator', label: 'Greek Simulator' },
   { route: 'strategySimulator', label: 'Strategy Simulator' },
 ];

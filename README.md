@@ -204,7 +204,7 @@ The repository includes a realtime dark terminal-style HYPE options dashboard in
 The dashboard is designed for professional options monitoring:
 
 - Market dashboard: spot, snapshot time, OI, volume, put/call ratio, net GEX, ATM IV, IV rank/percentile, term structure, IV smile, GEX/OI by strike and expiry, skew/fly tables, and order flow.
-- Position lookup: wallet lookup, selected positions, portfolio Greeks, delta curve, and payoff.
+- Position search: wallet search, selected positions, portfolio Greeks, delta curve, and payoff.
 - Greek simulator: multi-leg option simulation with prefetched Greek curves.
 - Strategy simulator: editable strategy legs, templates, payoff, and Greek curve previews.
 

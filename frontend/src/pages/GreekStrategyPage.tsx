@@ -14,10 +14,10 @@ import type {
   WalletPosition,
 } from '../types';
 
-export type GreekTab = 'lookup' | 'greek' | 'strategy';
+export type GreekTab = 'search' | 'greek' | 'strategy';
 
 const PAGE_META: Record<GreekTab, { title: string }> = {
-  lookup: { title: 'Position Lookup' },
+  search: { title: 'Position Search' },
   greek: { title: 'Greek Simulator' },
   strategy: { title: 'Strategy Simulator' },
 };
@@ -45,7 +45,7 @@ export function GreekStrategyPage({ tab }: { tab: GreekTab }) {
   }, []);
 
   useEffect(() => {
-    if (tab === 'lookup') {
+    if (tab === 'search') {
       setOptions([]);
       setOptionsError(null);
       setOptionsLoading(false);
@@ -162,7 +162,7 @@ export function GreekStrategyPage({ tab }: { tab: GreekTab }) {
     } catch (error: unknown) {
       if (mountedRef.current && walletRequestRef.current === requestId && !isAbortError(error)) {
         setWallet(null);
-        setWalletError('Wallet lookup unavailable');
+        setWalletError('Wallet search unavailable');
       }
     } finally {
       if (mountedRef.current && walletRequestRef.current === requestId) {
@@ -194,8 +194,8 @@ export function GreekStrategyPage({ tab }: { tab: GreekTab }) {
         </div>
       </section>
 
-      {tab === 'lookup' && (
-        <div className="greek-lookup-grid">
+      {tab === 'search' && (
+        <div className="greek-search-grid">
           <WalletLookupPanel wallet={wallet} loading={walletLoading} error={walletError} onLookup={lookupWallet} />
           <PositionsTable
             positions={visiblePositions}
@@ -284,7 +284,7 @@ function statusForTab({
   optionsLoading: boolean;
   optionsError: string | null;
 }) {
-  if (tab === 'lookup') {
+  if (tab === 'search') {
     if (!wallet) return { label: 'No wallet loaded', tone: 'stale' };
     return { label: `${selectedCount}/${visibleCount} positions selected`, tone: selectedCount > 0 ? 'live' : 'stale' };
   }

@@ -5,6 +5,7 @@ ROOT = Path(__file__).resolve().parents[1]
 APP = (ROOT / "frontend/src/App.tsx").read_text()
 ECHART = (ROOT / "frontend/src/components/EChart.tsx").read_text()
 API_CLIENT = (ROOT / "frontend/src/api/client.ts").read_text()
+TOPBAR = (ROOT / "frontend/src/components/TopBar.tsx").read_text()
 GREEK_SIMULATOR = (ROOT / "frontend/src/components/GreekSimulator.tsx").read_text()
 STRATEGY_SIMULATOR = (ROOT / "frontend/src/components/StrategySimulator.tsx").read_text()
 KPI_STRIP = (ROOT / "frontend/src/components/KpiStrip.tsx").read_text()
@@ -83,8 +84,17 @@ def test_dashboard_display_metadata_makes_units_and_history_rules_explicit() -> 
     assert "hasEnoughVolHistory" in DISPLAY
     assert "MIN_RANK_SAMPLES = 30" in DISPLAY
     assert "formatKpiDisplay('totalOptionOi'" in KPI_STRIP
+    assert "formatKpiDisplay('ivRankPercentile'" in KPI_STRIP
     assert "flash === 'neutral'" in KPI_STRIP
     assert ".kpi-value.pulse-neutral" in STYLES
+
+
+def test_market_topbar_removes_brand_pair_source_and_keeps_rank_in_kpi_row() -> None:
+    assert "HYPE_" not in TOPBAR
+    assert "market-switch" not in TOPBAR
+    assert "Source:" not in TOPBAR
+    assert "<span className=\"strip-label\">IV Rank</span>" not in APP
+    assert "<span className=\"strip-label\">IV Percentile</span>" not in APP
 
 
 def test_expiry_colors_are_stable_and_multi_expiry_tooltips_are_capped() -> None:

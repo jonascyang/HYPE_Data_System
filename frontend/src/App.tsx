@@ -10,8 +10,7 @@ import { SideNav, type AppRoute } from './components/SideNav';
 import { TopBar } from './components/TopBar';
 import { gexByExpiryOption, gexByStrikeOption, ivSmileOption, oiByExpiryOption, oiByStrikeOption, termStructureOption } from './charts/options';
 import { useDashboardSocket } from './hooks/useDashboardSocket';
-import { formatExpiry, formatPercent, formatTenorLabel, formatVol, formatVolChange } from './format';
-import { hasEnoughVolHistory } from './display';
+import { formatExpiry, formatTenorLabel, formatVol, formatVolChange } from './format';
 import { markPerf, measurePerf } from './perf';
 import type { GreekTab } from './pages/GreekStrategyPage';
 import type { AtmTerm, DashboardBootstrap, ExpiryMetric, GexExpiryPoint, GexPoint, IvSmilePoint, NullableNumber, OiExpiry, OiStrikePoint, OrderFlowEvent, OrderFlowFilters, SkewTerm, Snapshot, Summary, VolRegime } from './types';
@@ -37,7 +36,7 @@ const DEFAULT_ORDER_FLOW_FILTERS: OrderFlowFilters = {
 const EMPTY_PANEL_EXPIRIES = [''];
 
 const GREEK_ROUTES: Partial<Record<AppRoute, GreekTab>> = {
-  positionLookup: 'lookup',
+  positionSearch: 'search',
   greekSimulator: 'greek',
   strategySimulator: 'strategy',
 };
@@ -263,7 +262,6 @@ function MarketDashboard({
 
   const panelExpiries = expiries.length ? expiries : EMPTY_PANEL_EXPIRIES;
   const ivSmileMetric = findExpiry(data?.expiries, ivSmileExpiry);
-  const showRank = hasEnoughVolHistory(volRegime?.sampleCount);
   const isLoading = !data && !bootstrapError;
   const hasBootstrapError = Boolean(bootstrapError);
   const spotPrice = data?.summary.spotPrice ?? null;
@@ -346,7 +344,6 @@ function MarketDashboard({
         <VolRegimeStrip
           volRegime={volRegime}
           volTenor={volTenor}
-          showRank={showRank}
           onVolTenorChange={handleVolTenorChange}
         />
         <DashboardChartGrid
@@ -382,12 +379,10 @@ function MarketDashboard({
 const VolRegimeStrip = memo(function VolRegimeStrip({
   volRegime,
   volTenor,
-  showRank,
   onVolTenorChange,
 }: {
   volRegime: VolRegime | null;
   volTenor: string;
-  showRank: boolean;
   onVolTenorChange: (tenor: string) => void;
 }) {
   return (
@@ -396,18 +391,6 @@ const VolRegimeStrip = memo(function VolRegimeStrip({
         <span className="strip-label">ATM IV {volRegime?.tenor ?? volTenor}</span>
         <MorphValue value={formatVol(volRegime?.currentAtmIv)} className="strip-value" />
       </div>
-      {showRank && (
-        <>
-          <div>
-            <span className="strip-label">IV Rank</span>
-            <MorphValue value={formatPercent(volRegime?.ivRank, 0)} className="strip-value" />
-          </div>
-          <div>
-            <span className="strip-label">IV Percentile</span>
-            <MorphValue value={formatPercent(volRegime?.ivPercentile, 0)} className="strip-value" />
-          </div>
-        </>
-      )}
       <div className="local-controls">
         <SegmentControl value={volTenor} options={['1W', '1M', '3M', '6M']} onChange={onVolTenorChange} label="Volatility tenor" />
       </div>
